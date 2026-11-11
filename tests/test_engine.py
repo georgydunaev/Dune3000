@@ -11,7 +11,7 @@ from dune3000.engine import (
     Sandworm,
     Unit,
 )
-from dune3000.procgen import generate_terrain_svg
+from dune3000.procgen import generate_terrain_svg, generate_unit_svg
 
 
 class TestDune3000Engine(unittest.TestCase):
@@ -113,6 +113,31 @@ class TestDune3000Engine(unittest.TestCase):
         small.buildings.append(Building("Windtrap", "Harkonnen", 1, 1, power_produced=100))
         small.buildings.append(Building("Refinery", "Harkonnen", 2, 2, power_consumed=300))
         self.assertEqual(small.power_efficiency("Harkonnen"), 0.3333)
+
+    def test_generate_unit_svg(self):
+        """Test generate_unit_svg for Harvester, Trike, and CombatTank."""
+        # Test Harvester with Atreides
+        svg = generate_unit_svg("Harvester", "Atreides", size=32)
+        self.assertIn("<svg", svg)
+        self.assertIn("#2563eb", svg)
+        self.assertIn("polygon", svg)
+
+        # Test Trike with Harkonnen
+        svg = generate_unit_svg("Trike", "Harkonnen", size=32)
+        self.assertIn("<svg", svg)
+        self.assertIn("#dc2626", svg)
+        self.assertIn("polygon", svg)
+
+        # Test CombatTank with Ordos
+        svg = generate_unit_svg("CombatTank", "Ordos", size=32)
+        self.assertIn("<svg", svg)
+        self.assertIn("#16a34a", svg)
+        self.assertIn("rect", svg)
+
+        # Test with default house color (unknown house)
+        svg = generate_unit_svg("Harvester", "UnknownHouse", size=32)
+        self.assertIn("<svg", svg)
+        self.assertIn("#2563eb", svg)
 
 
 if __name__ == "__main__":

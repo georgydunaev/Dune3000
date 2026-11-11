@@ -1,15 +1,16 @@
-"""
-Algorithmic procedural graphics generator for Dune 3000.
+"""Algorithmic procedural graphics generator for Dune 3000.
 Generates lightweight deterministic SVG/pixel representations for terrain tiles,
 buildings, units, and sandworms without external image assets.
 """
 from typing import Dict
+
 
 HOUSE_COLORS: Dict[str, str] = {
     "Atreides": "#2563eb",
     "Harkonnen": "#dc2626",
     "Ordos": "#16a34a",
 }
+
 
 TERRAIN_COLORS: Dict[str, str] = {
     "SAND": "#e5c07b",
@@ -32,3 +33,50 @@ def generate_terrain_svg(terrain_type: str, size: int = 32, seed: int = 0) -> st
         f'<circle cx="{cx}" cy="{cy}" r="2" fill="rgba(0,0,0,0.18)"/>'
         f'</svg>'
     )
+
+
+def generate_unit_svg(unit_type: str, house: str, size: int = 32) -> str:
+    """Generates an SVG string for a unit type with house color and geometric shape.
+
+    Args:
+        unit_type: One of "Harvester", "Trike", "CombatTank".
+        house: The house color key (e.g., "Atreides").
+        size: SVG size in pixels (default 32).
+
+    Returns:
+        A valid SVG string.
+    """
+    color = HOUSE_COLORS.get(house, "#2563eb")
+    half = size // 2
+    quarter = size // 4
+
+    if unit_type == "Harvester":
+        # Diamond shape for Harvester
+        points = f"{half},{quarter} {size - quarter},{half} {half},{size - quarter} {quarter},{half}"
+        return (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">'
+            f'<polygon points="{points}" fill="{color}"/>'
+            f'</svg>'
+        )
+    elif unit_type == "Trike":
+        # Triangle shape for Trike (pointing right)
+        return (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">'
+            f'<polygon points="{half},{quarter} {quarter},{half} {half},{size - quarter}" fill="{color}"/>'
+            f'</svg>'
+        )
+    elif unit_type == "CombatTank":
+        # Rectangle shape for CombatTank
+        return (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">'
+            f'<rect x="{quarter}" y="{quarter}" width="{size - 2 * quarter}" height="{size - 2 * quarter}" fill="{color}"/>'
+            f'</svg>'
+        )
+    else:
+        # Default: diamond shape for unknown unit types
+        points = f"{half},{quarter} {size - quarter},{half} {half},{size - quarter} {quarter},{half}"
+        return (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">'
+            f'<polygon points="{points}" fill="{color}"/>'
+            f'</svg>'
+        )
