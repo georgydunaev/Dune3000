@@ -291,6 +291,7 @@ class GameState:
     buildings: List[Building] = field(default_factory=list)
     units: List[Unit] = field(default_factory=list)
     sandworms: List[Sandworm] = field(default_factory=list)
+    spice_carried: Dict[str, int] = field(default_factory=lambda: {h: 0 for h in HOUSES})
 
     def add_credits(self, house: str, amount: int) -> int:
         self.credits[house] = self.credits.get(house, 0) + int(amount)
