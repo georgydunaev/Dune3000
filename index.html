@@ -2,30 +2,358 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Dune 3000 - Algorithmic RTS Prototype</title>
+  <title>Dune 3000 - Algorithmic RTS</title>
   <style>
-    body { background: #141318; color: #e2e8f0; font-family: monospace; margin: 24px; }
-    canvas { border: 2px solid #5c6370; background: #e5c07b; image-rendering: pixelated; }
+    * { box-sizing: border-box; }
+    body {
+      background: #141318;
+      color: #e2e8f0;
+      font-family: monospace;
+      margin: 0;
+      padding: 16px 24px;
+      width: 100%;
+    }
+    h2 { margin: 0 0 8px 0; color: #f59e0b; }
+    #hud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      align-items: center;
+      background: #1e2028;
+      border: 1px solid #3f4454;
+      padding: 10px 14px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    .hud-stat { font-weight: bold; color: #93c5fd; }
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    button {
+      background: #272a36;
+      color: #e2e8f0;
+      border: 1px solid #5c6370;
+      padding: 6px 12px;
+      font-family: monospace;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button:hover { background: #3b4052; }
+    button.active { background: #2563eb; border-color: #93c5fd; color: #ffffff; }
+    #main-area {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+    canvas {
+      border: 2px solid #5c6370;
+      background: #e5c07b;
+      image-rendering: pixelated;
+      cursor: crosshair;
+    }
+    #log-panel {
+      width: 340px;
+      height: 512px;
+      background: #1a1b22;
+      border: 1px solid #3f4454;
+      padding: 10px;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .log-entry { margin-bottom: 4px; border-bottom: 1px dashed #2a2d3a; padding-bottom: 2px; }
   </style>
 </head>
 <body>
-  <h2>Dune 3000 (Algorithmic Graphics RTS Prototype)</h2>
-  <p>Houses: Atreides | Harkonnen | Ordos. Graphics generated procedurally by algorithms.</p>
-  <canvas id="gameCanvas" width="512" height="512"></canvas>
+  <h2>Dune 3000 - Algorithmic Graphics RTS</h2>
+  <div id="hud">
+    <span>House: <strong style="color:#3b82f6">Atreides</strong> vs <strong style="color:#ef4444">Harkonnen</strong></span>
+    <span>Credits: <span id="hud-credits" class="hud-stat">1000</span> / <span id="hud-capacity">2000</span></span>
+    <span>Power: <span id="hud-power" class="hud-stat">100 / 30 (100%)</span></span>
+    <span>Tick: <span id="hud-tick" class="hud-stat">0</span></span>
+    <span>Status: <span id="hud-status" class="hud-stat">Battle Active</span></span>
+  </div>
+  <div id="controls">
+    <button id="btn-select-mode" class="active" onclick="setMode('select')">Select / Command Unit</button>
+    <button id="btn-build-concrete" onclick="setMode('Concrete')">Place Concrete (50)</button>
+    <button id="btn-build-windtrap" onclick="setMode('WindTrap')">Build WindTrap (200)</button>
+    <button id="btn-build-refinery" onclick="setMode('Refinery')">Build Refinery (400)</button>
+    <button id="btn-build-silo" onclick="setMode('Silo')">Build Silo (150)</button>
+    <button id="btn-train-harvester" onclick="trainUnit('Harvester', 400)">Train Harvester (400)</button>
+    <button id="btn-train-trike" onclick="trainUnit('Trike', 150)">Train Trike (150)</button>
+    <button id="btn-train-tank" onclick="trainUnit('CombatTank', 300)">Train CombatTank (300)</button>
+    <button id="btn-step-tick" onclick="stepTick()">Step Tick</button>
+    <button id="btn-autoplay" onclick="toggleAutoplay()">Auto-Play: ON</button>
+  </div>
+  <div id="main-area">
+    <canvas id="gameCanvas" width="512" height="512"></canvas>
+    <div id="log-panel"></div>
+  </div>
   <script>
+    const TILE = 32, W = 16, H = 16;
+    const COLORS = {
+      SAND: '#e5c07b', DUNES: '#d19a66', ROCK: '#5c6370',
+      CONCRETE: '#9ca3af', SPICE_THIN: '#e06c75', SPICE_THICK: '#be5046',
+      Atreides: '#2563eb', Harkonnen: '#dc2626'
+    };
+    const BUILDING_COSTS = { Concrete: 50, WindTrap: 200, Refinery: 400, Silo: 150 };
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const TILE = 32;
-    for (let y = 0; y < 16; y++) {
-      for (let x = 0; x < 16; x++) {
-        const isRock = (x < 4 && y < 4);
-        const isSpice = (x > 10 && y > 10);
-        ctx.fillStyle = isRock ? '#5c6370' : (isSpice ? '#be5046' : '#e5c07b');
-        ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
-        ctx.strokeStyle = 'rgba(0,0,0,0.08)';
-        ctx.strokeRect(x * TILE, y * TILE, TILE, TILE);
+    let mode = 'select';
+    let selectedUnit = null;
+    let tickCount = 0;
+    let credits = { Atreides: 1000, Harkonnen: 1000 };
+    let tiles = Array.from({ length: H }, (_, y) =>
+      Array.from({ length: W }, (_, x) => {
+        if ((x < 5 && y < 5) || (x > 10 && y > 10)) return 'ROCK';
+        if ((x >= 6 && x <= 9 && y >= 5 && y <= 10)) return (x + y) % 2 === 0 ? 'SPICE_THICK' : 'SPICE_THIN';
+        return 'SAND';
+      })
+    );
+    let buildings = [
+      { type: 'ConstructionYard', house: 'Atreides', x: 1, y: 1, hp: 400, maxHp: 400, pProd: 50, pCons: 0 },
+      { type: 'WindTrap', house: 'Atreides', x: 2, y: 1, hp: 400, maxHp: 400, pProd: 100, pCons: 0 },
+      { type: 'Refinery', house: 'Atreides', x: 1, y: 2, hp: 400, maxHp: 400, pProd: 0, pCons: 30 },
+      { type: 'ConstructionYard', house: 'Harkonnen', x: 14, y: 14, hp: 400, maxHp: 400, pProd: 50, pCons: 0 },
+      { type: 'Refinery', house: 'Harkonnen', x: 13, y: 14, hp: 400, maxHp: 400, pProd: 0, pCons: 30 }
+    ];
+    let units = [
+      { type: 'Harvester', house: 'Atreides', x: 3, y: 3, tx: 6, ty: 6, hp: 120, maxHp: 120, spice: 0, maxSpice: 700, dmg: 5, range: 1 },
+      { type: 'CombatTank', house: 'Atreides', x: 4, y: 2, tx: 4, ty: 2, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 25, range: 3 },
+      { type: 'Harvester', house: 'Harkonnen', x: 12, y: 12, tx: 9, ty: 9, hp: 120, maxHp: 120, spice: 0, maxSpice: 700, dmg: 5, range: 1 },
+      { type: 'CombatTank', house: 'Harkonnen', x: 11, y: 13, tx: 11, ty: 13, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 25, range: 3 }
+    ];
+    let sandworm = { x: 0, y: 14 };
+
+    function logMsg(msg) {
+      const panel = document.getElementById('log-panel');
+      const div = document.createElement('div');
+      div.className = 'log-entry';
+      div.textContent = `[T${tickCount}] ${msg}`;
+      panel.prepend(div);
+    }
+
+    function setMode(m) {
+      mode = m;
+      document.querySelectorAll('#controls button').forEach(b => b.classList.remove('active'));
+      const mapBtn = {
+        select: 'btn-select-mode', Concrete: 'btn-build-concrete',
+        WindTrap: 'btn-build-windtrap', Refinery: 'btn-build-refinery', Silo: 'btn-build-silo'
+      };
+      if (mapBtn[m]) document.getElementById(mapBtn[m]).classList.add('active');
+    }
+
+    function maxCapacity(house) {
+      let cap = 1000;
+      for (const b of buildings) {
+        if (b.house === house && b.hp > 0 && (b.type === 'Refinery' || b.type === 'Silo')) cap += 1000;
+      }
+      return cap;
+    }
+
+    function trainUnit(unitType, cost) {
+      if (credits.Atreides < cost) { logMsg(`Insufficient credits for ${unitType} (${cost}).`); return; }
+      credits.Atreides -= cost;
+      const u = {
+        type: unitType, house: 'Atreides', x: 2, y: 3, tx: 4, ty: 4,
+        hp: unitType === 'CombatTank' ? 140 : 90, maxHp: unitType === 'CombatTank' ? 140 : 90,
+        spice: 0, maxSpice: unitType === 'Harvester' ? 700 : 0,
+        dmg: unitType === 'CombatTank' ? 25 : (unitType === 'Trike' ? 15 : 5),
+        range: unitType === 'CombatTank' ? 3 : 2
+      };
+      units.push(u);
+      selectedUnit = u;
+      logMsg(`Trained Atreides ${unitType} at (2, 3).`);
+      render();
+    }
+
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const gx = Math.max(0, Math.min(W - 1, Math.floor((e.clientX - rect.left) / TILE)));
+      const gy = Math.max(0, Math.min(H - 1, Math.floor((e.clientY - rect.top) / TILE)));
+      if (mode === 'select') {
+        const clicked = units.find(u => u.house === 'Atreides' && u.x === gx && u.y === gy);
+        if (clicked) {
+          selectedUnit = clicked;
+          logMsg(`Selected ${clicked.type} at (${gx}, ${gy}). Click any tile to move/attack.`);
+        } else if (selectedUnit && selectedUnit.hp > 0) {
+          selectedUnit.tx = gx;
+          selectedUnit.ty = gy;
+          logMsg(`Ordered ${selectedUnit.type} to (${gx}, ${gy}).`);
+        }
+      } else if (mode === 'Concrete') {
+        if (credits.Atreides < 50) { logMsg('Need 50 credits for Concrete.'); return; }
+        credits.Atreides -= 50;
+        tiles[gy][gx] = 'CONCRETE';
+        logMsg(`Placed Concrete Slab at (${gx}, ${gy}).`);
+        setMode('select');
+      } else {
+        const cost = BUILDING_COSTS[mode] || 200;
+        if (credits.Atreides < cost) { logMsg(`Need ${cost} credits for ${mode}.`); return; }
+        if (buildings.some(b => b.x === gx && b.y === gy)) { logMsg('Tile already occupied.'); return; }
+        credits.Atreides -= cost;
+        const onConcrete = tiles[gy][gx] === 'CONCRETE';
+        const hp = onConcrete ? 400 : 200;
+        buildings.push({
+          type: mode, house: 'Atreides', x: gx, y: gy, hp, maxHp: 400,
+          pProd: mode === 'WindTrap' ? 100 : 0, pCons: mode === 'WindTrap' ? 0 : 30
+        });
+        logMsg(`Constructed ${mode} at (${gx}, ${gy}) [HP ${hp}/400].`);
+        setMode('select');
+      }
+      render();
+    });
+
+    function moveTowards(obj, tx, ty) {
+      if (obj.x < tx) obj.x++;
+      else if (obj.x > tx) obj.x--;
+      else if (obj.y < ty) obj.y++;
+      else if (obj.y > ty) obj.y--;
+    }
+
+    function stepTick() {
+      tickCount++;
+      // Harvester AI & unit movement
+      for (const u of units) {
+        if (u.hp <= 0) continue;
+        if (u.type === 'Harvester') {
+          const ref = buildings.find(b => b.house === u.house && b.type === 'Refinery' && b.hp > 0);
+          if (u.spice >= u.maxSpice && ref) {
+            u.tx = ref.x; u.ty = ref.y;
+          } else if (tiles[u.y][u.x] !== 'SPICE_THICK' && tiles[u.y][u.x] !== 'SPICE_THIN') {
+            outer: for (let y = 0; y < H; y++) {
+              for (let x = 0; x < W; x++) {
+                if (tiles[y][x] === 'SPICE_THICK' || tiles[y][x] === 'SPICE_THIN') { u.tx = x; u.ty = y; break outer; }
+              }
+            }
+          }
+          if (ref && u.x === ref.x && u.y === ref.y && u.spice > 0) {
+            credits[u.house] = Math.min(maxCapacity(u.house), credits[u.house] + u.spice);
+            logMsg(`${u.house} Harvester unloaded ${u.spice} spice.`);
+            u.spice = 0;
+          } else if (tiles[u.y][u.x] === 'SPICE_THICK') {
+            u.spice = Math.min(u.maxSpice, u.spice + 100);
+            tiles[u.y][u.x] = 'SPICE_THIN';
+          } else if (tiles[u.y][u.x] === 'SPICE_THIN') {
+            u.spice = Math.min(u.maxSpice, u.spice + 50);
+            tiles[u.y][u.x] = 'SAND';
+          } else {
+            moveTowards(u, u.tx, u.ty);
+          }
+        } else {
+          // Combat unit: attack nearest enemy in range or move toward target
+          const enemy = units.find(e => e.house !== u.house && e.hp > 0 && Math.abs(e.x - u.x) + Math.abs(e.y - u.y) <= u.range)
+            || buildings.find(b => b.house !== u.house && b.hp > 0 && Math.abs(b.x - u.x) + Math.abs(b.y - u.y) <= u.range);
+          if (enemy) {
+            enemy.hp = Math.max(0, enemy.hp - u.dmg);
+          } else {
+            moveTowards(u, u.tx, u.ty);
+          }
+        }
+      }
+      // Harkonnen AI: periodically send tanks toward Atreides base
+      if (tickCount % 8 === 0 && credits.Harkonnen >= 300) {
+        credits.Harkonnen -= 300;
+        units.push({ type: 'CombatTank', house: 'Harkonnen', x: 12, y: 13, tx: 2, ty: 2, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 22, range: 3 });
+        logMsg('Harkonnen deployed a CombatTank!');
+      }
+      // Sandworm hunts units on SAND/SPICE
+      const prey = units.filter(u => u.hp > 0 && tiles[u.y][u.x] !== 'ROCK' && tiles[u.y][u.x] !== 'CONCRETE');
+      if (prey.length > 0 && tickCount % 2 === 0) {
+        prey.sort((a, b) => (Math.abs(a.x - sandworm.x) + Math.abs(a.y - sandworm.y)) - (Math.abs(b.x - sandworm.x) + Math.abs(b.y - sandworm.y)));
+        moveTowards(sandworm, prey[0].x, prey[0].y);
+        if (sandworm.x === prey[0].x && sandworm.y === prey[0].y) {
+          prey[0].hp = 0;
+          logMsg(`Sandworm devoured ${prey[0].house} ${prey[0].type}!`);
+        }
+      }
+      units = units.filter(u => u.hp > 0);
+      buildings = buildings.filter(b => b.hp > 0);
+      render();
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          ctx.fillStyle = COLORS[tiles[y][x]] || COLORS.SAND;
+          ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+          ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+          ctx.strokeRect(x * TILE, y * TILE, TILE, TILE);
+        }
+      }
+      // Draw buildings
+      for (const b of buildings) {
+        ctx.fillStyle = COLORS[b.house] || '#2563eb';
+        ctx.fillRect(b.x * TILE + 3, b.y * TILE + 3, TILE - 6, TILE - 6);
+        ctx.strokeStyle = '#ffffff';
+        ctx.strokeRect(b.x * TILE + 3, b.y * TILE + 3, TILE - 6, TILE - 6);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px monospace';
+        ctx.fillText(b.type.slice(0, 3).toUpperCase(), b.x * TILE + 5, b.y * TILE + 19);
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(b.x * TILE + 3, b.y * TILE + 1, Math.floor((TILE - 6) * (b.hp / b.maxHp)), 2);
+      }
+      // Draw units
+      for (const u of units) {
+        const cx = u.x * TILE + TILE / 2, cy = u.y * TILE + TILE / 2;
+        ctx.fillStyle = COLORS[u.house] || '#2563eb';
+        ctx.beginPath();
+        if (u.type === 'Harvester') {
+          ctx.moveTo(cx, cy - 10); ctx.lineTo(cx + 10, cy); ctx.lineTo(cx, cy + 10); ctx.lineTo(cx - 10, cy);
+        } else if (u.type === 'Trike') {
+          ctx.moveTo(cx + 10, cy); ctx.lineTo(cx - 8, cy - 8); ctx.lineTo(cx - 8, cy + 8);
+        } else {
+          ctx.rect(cx - 9, cy - 9, 18, 18);
+        }
+        ctx.closePath();
+        ctx.fill();
+        if (selectedUnit === u) {
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(u.x * TILE + 2, u.y * TILE + 2, TILE - 4, TILE - 4);
+          ctx.lineWidth = 1;
+        }
+      }
+      // Draw sandworm
+      ctx.strokeStyle = '#78350f';
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.arc(sandworm.x * TILE + 16, sandworm.y * TILE + 16, 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Update HUD
+      const pProd = buildings.filter(b => b.house === 'Atreides').reduce((s, b) => s + b.pProd, 0);
+      const pCons = buildings.filter(b => b.house === 'Atreides').reduce((s, b) => s + b.pCons, 0);
+      const eff = (pCons <= 0 || pProd >= pCons) ? 100 : Math.max(25, Math.round((pProd / pCons) * 100));
+      document.getElementById('hud-credits').textContent = credits.Atreides;
+      document.getElementById('hud-capacity').textContent = maxCapacity('Atreides');
+      document.getElementById('hud-power').textContent = `${pProd} / ${pCons} (${eff}%)`;
+      document.getElementById('hud-tick').textContent = tickCount;
+      const atrAlive = buildings.some(b => b.house === 'Atreides') || units.some(u => u.house === 'Atreides');
+      const harAlive = buildings.some(b => b.house === 'Harkonnen') || units.some(u => u.house === 'Harkonnen');
+      document.getElementById('hud-status').textContent = !harAlive ? 'Atreides Victory!' : (!atrAlive ? 'Harkonnen Victory!' : 'Battle Active');
+    }
+
+    let autoTimer = setInterval(stepTick, 1200);
+    function toggleAutoplay() {
+      const btn = document.getElementById('btn-autoplay');
+      if (autoTimer) {
+        clearInterval(autoTimer);
+        autoTimer = null;
+        btn.textContent = 'Auto-Play: OFF';
+      } else {
+        autoTimer = setInterval(stepTick, 1200);
+        btn.textContent = 'Auto-Play: ON';
       }
     }
+    logMsg('Dune 3000 initialized. Select units or construct buildings.');
+    render();
   </script>
 </body>
 </html>
