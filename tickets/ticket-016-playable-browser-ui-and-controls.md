@@ -1,6 +1,6 @@
 # Ticket 16: Make Browser Game Playable in `index.html` with HUD, Controls, and Game Loop
 
-**State:** open
+**State:** closed
 **Priority:** high
 
 ## Description

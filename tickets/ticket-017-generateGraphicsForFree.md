@@ -1,6 +1,6 @@
 # Ticket 17: Generate for Free Better Multi-Layer Procedural Graphics & Sprites (`procgen.py`)
 
-**State:** open
+**State:** closed
 **Labels:** user, dune3000, graphics
 
 ## User Request

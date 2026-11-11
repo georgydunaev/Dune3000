@@ -2,6 +2,7 @@
 Generates lightweight deterministic SVG/pixel representations for terrain tiles,
 buildings, units, and sandworms without external image assets.
 """
+import math
 from typing import Dict
 
 
@@ -228,6 +229,12 @@ def generate_sandworm_svg(size: int = 32) -> str:
     )
     # Teeth ring: a full 360-degree band of radial spikes between the
     # maw (inner radius) and the mandible (outer radius).
+    def _px(size_, cx, r, angle):
+        return round(cx + r * math.cos(math.radians(angle)), 2)
+
+    def _py(size_, cy, r, angle):
+        return round(cy + r * math.sin(math.radians(angle)), 2)
+
     teeth = []
     for i in range(8):
         angle = i * 45
@@ -238,12 +245,6 @@ def generate_sandworm_svg(size: int = 32) -> str:
         teeth.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
                      f'stroke="#e6c88c" stroke-width="2"/>')
     teeth_ring = "".join(teeth)
-
-    def _px(size_, cx, r, angle):
-        return round(cx + r * math.cos(math.radians(angle)), 2)
-
-    def _py(size_, cy, r, angle):
-        return round(cy + r * math.sin(math.radians(angle)), 2)
 
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">'

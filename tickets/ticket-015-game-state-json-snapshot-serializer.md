@@ -1,6 +1,6 @@
 # Ticket 15: Implement JSON Snapshot Serializer (`GameState.to_dict`)
 
-**State:** open
+**State:** closed
 **Priority:** medium
 
 ## Description

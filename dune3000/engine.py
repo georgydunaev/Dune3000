@@ -298,6 +298,46 @@ class GameState:
         b = Building(building_type=building_type, house=house, x=x, y=y, power_produced=power_produced, power_consumed=power_consumed)
         return self.place_building(b)
 
+    def to_dict(self) -> Dict:
+        """Serialize the game state to a dictionary for JSON snapshot.
+        
+        Returns:
+            Dict with keys: width, height, tiles, credits, buildings, units, sandworms.
+        """
+        return {
+            "width": self.game_map.width,
+            "height": self.game_map.height,
+            "tiles": self.game_map.tiles,
+            "credits": dict(self.credits),
+            "buildings": [
+                {
+                    "building_type": b.building_type,
+                    "house": b.house,
+                    "x": b.x,
+                    "y": b.y,
+                    "hp": b.hp,
+                    "max_hp": b.max_hp,
+                }
+                for b in self.buildings
+            ],
+            "units": [
+                {
+                    "unit_type": u.unit_type,
+                    "house": u.house,
+                    "x": u.x,
+                    "y": u.y,
+                    "hp": u.hp,
+                    "max_hp": u.max_hp,
+                    "spice_carried": u.spice_carried,
+                }
+                for u in self.units
+            ],
+            "sandworms": [
+                {"x": w.x, "y": w.y}
+                for w in self.sandworms
+            ],
+        }
+
     def step_tick(self) -> Dict[str, int]:
         """Execute one simulation tick step.
         

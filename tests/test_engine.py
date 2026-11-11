@@ -12,7 +12,13 @@ from dune3000.engine import (
     Unit,
     compute_damage,
 )
-from dune3000.procgen import generate_building_svg, generate_terrain_svg, generate_unit_svg
+from dune3000.procgen import (
+    generate_building_svg,
+    generate_explosion_svg,
+    generate_sandworm_svg,
+    generate_terrain_svg,
+    generate_unit_svg,
+)
 
 
 class TestDune3000Engine(unittest.TestCase):
@@ -573,6 +579,69 @@ class TestDune3000Engine(unittest.TestCase):
         gs3.units.append(Unit("Trike", "Atreides", 2, 2, hp=0))
         self.assertEqual(gs3.check_winner(), "Draw")
 
+
+    def test_game_state_to_dict(self):
+        """test_game_state_to_dict: verify GameState.to_dict serializes correctly."""
+        gs = GameState(GridMap(10, 10))
+        gs.tick_count = 42
+        gs.credits = {"Atreides": 1500, "Harkonnen": 800, "Ordos": 600}
+        
+        # Add a building
+        b = Building("Refinery", "Atreides", 3, 3, hp=350, max_hp=400)
+        gs.buildings.append(b)
+        
+        # Add a unit
+        u = Unit("Trike", "Harkonnen", 5, 5, hp=80, max_hp=100, spice_carried=200)
+        gs.units.append(u)
+        
+        # Add a sandworm
+        ws = Sandworm(7, 8)
+        gs.sandworms.append(ws)
+        
+        d = gs.to_dict()
+        
+        # Check basic fields
+        self.assertEqual(d["width"], 10)
+        self.assertEqual(d["height"], 10)
+        self.assertEqual(d["tiles"], [["SAND"] * 10 for _ in range(10)])
+        self.assertEqual(d["credits"], {"Atreides": 1500, "Harkonnen": 800, "Ordos": 600})
+        
+        # Check building dict
+        building_dict = d["buildings"][0]
+        self.assertEqual(building_dict["building_type"], "Refinery")
+        self.assertEqual(building_dict["house"], "Atreides")
+        self.assertEqual(building_dict["x"], 3)
+        self.assertEqual(building_dict["y"], 3)
+        self.assertEqual(building_dict["hp"], 350)
+        self.assertEqual(building_dict["max_hp"], 400)
+        
+        # Check unit dict
+        unit_dict = d["units"][0]
+        self.assertEqual(unit_dict["unit_type"], "Trike")
+        self.assertEqual(unit_dict["house"], "Harkonnen")
+        self.assertEqual(unit_dict["x"], 5)
+        self.assertEqual(unit_dict["y"], 5)
+        self.assertEqual(unit_dict["hp"], 80)
+        self.assertEqual(unit_dict["max_hp"], 100)
+        self.assertEqual(unit_dict["spice_carried"], 200)
+        
+        # Check sandworm dict
+        sandworm_dict = d["sandworms"][0]
+        self.assertEqual(sandworm_dict["x"], 7)
+        self.assertEqual(sandworm_dict["y"], 8)
+
+    def test_generate_sandworm_and_explosion_svg(self):
+        """Verify generate_sandworm_svg and generate_explosion_svg produce valid multi-layer SVGs."""
+        worm_svg = generate_sandworm_svg(size=32)
+        self.assertIn("<svg", worm_svg)
+        self.assertIn("<circle", worm_svg)
+        self.assertIn("width=\"32\"", worm_svg)
+
+        exp0 = generate_explosion_svg(size=32, frame=0)
+        exp1 = generate_explosion_svg(size=32, frame=1)
+        self.assertIn("<svg", exp0)
+        self.assertIn("#ff4500", exp0)
+        self.assertNotEqual(exp0, exp1)
 
 if __name__ == "__main__":
     unittest.main()
