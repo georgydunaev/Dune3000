@@ -1225,6 +1225,32 @@ class TestDune3000Engine(unittest.TestCase):
         gs.buildings.append(friendly_b)
         self.assertFalse(gs.capture_building(far_eng, friendly_b))
 
+    def test_apply_sandstorm(self):
+        """test_apply_sandstorm: 15 damage to exposed units on SAND/SPICE within radius, sheltered on ROCK/CONCRETE."""
+        from dune3000.engine import SPICE_THICK, ROCK
+        gm = GridMap(10, 10)
+        gm.set_tile(5, 5, SPICE_THICK)
+        gm.set_tile(4, 5, ROCK)
+        gs = GameState(gm)
+
+        # Unit 1: on SAND at (5, 4), dist=1 <= 2 -> takes 15 dmg
+        u_sand = Unit("Trike", "Atreides", 5, 4, hp=100)
+        # Unit 2: on SPICE_THICK at (5, 5), dist=0 <= 2 -> takes 15 dmg
+        u_spice = Unit("Harvester", "Atreides", 5, 5, hp=100)
+        # Unit 3: on ROCK at (4, 5), dist=1 <= 2 -> sheltered, 0 dmg
+        u_rock = Unit("CombatTank", "Atreides", 4, 5, hp=100)
+        # Unit 4: on SAND at (9, 9), dist=8 > 2 -> out of range, 0 dmg
+        u_far = Unit("Trike", "Harkonnen", 9, 9, hp=100)
+
+        gs.units.extend([u_sand, u_spice, u_rock, u_far])
+
+        damaged = gs.apply_sandstorm(5, 5, radius=2)
+        self.assertEqual(damaged, 2)
+        self.assertEqual(u_sand.hp, 85)
+        self.assertEqual(u_spice.hp, 85)
+        self.assertEqual(u_rock.hp, 100)
+        self.assertEqual(u_far.hp, 100)
+
 
 if __name__ == "__main__":
     unittest.main()
