@@ -91,6 +91,29 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertIn(b1, gs.buildings)
         self.assertIn(b2, gs.buildings)
 
+    def test_power_efficiency(self):
+        """power_efficiency: 1.0 at normal power, 0.5 at deficit, 0.25 minimum clamp."""
+        gs = GameState(GridMap(8, 8))
+        # Normal power: no consumption -> full efficiency.
+        self.assertEqual(gs.power_efficiency("Atreides"), 1.0)
+
+        # Low power: produced half of consumed -> ratio 0.5.
+        windtrap = Building("Windtrap", "Atreides", 1, 1, power_produced=50)
+        gs.buildings.append(windtrap)
+        refinery = Building("Refinery", "Atreides", 2, 2, power_consumed=100)
+        gs.buildings.append(refinery)
+        self.assertEqual(gs.power_efficiency("Atreides"), 0.5)
+
+        # Minimum clamp: ratio below 0.25 is clamped up to 0.25.
+        gs.buildings.append(Building("Factory", "Atreides", 3, 3, power_consumed=300))
+        self.assertEqual(gs.power_efficiency("Atreides"), 0.25)
+
+        # Rounding: 100/300 -> 0.3333 (4 decimal places).
+        small = GameState(GridMap(8, 8))
+        small.buildings.append(Building("Windtrap", "Harkonnen", 1, 1, power_produced=100))
+        small.buildings.append(Building("Refinery", "Harkonnen", 2, 2, power_consumed=300))
+        self.assertEqual(small.power_efficiency("Harkonnen"), 0.3333)
+
 
 if __name__ == "__main__":
     unittest.main()
