@@ -906,5 +906,86 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertIn("#b45309", svg)
 
 
+    def test_step_ai_commander(self):
+        """test_step_ai_commander: verify AI commander spawns tank or moves/idles."""
+        # Test 1: Spawn CombatTank when enough credits and alive building exists
+        gs = GameState(GridMap(8, 8))
+        gs.credits["Atreides"] = 500
+        b = Building("Barracks", "Atreides", 3, 3)
+        gs.buildings.append(b)
+        result = gs.step_ai_commander("Atreides")
+        self.assertEqual(result, "spawned_tank")
+        self.assertEqual(gs.credits["Atreides"], 300)  # 500 - 200
+        tank = gs.units[-1]
+        self.assertEqual(tank.unit_type, "CombatTank")
+        self.assertEqual(tank.house, "Atreides")
+        self.assertEqual(tank.x, 3)
+        self.assertEqual(tank.y, 3)
+        self.assertEqual(tank.hp, 120)
+        self.assertEqual(tank.max_hp, 120)
+        self.assertEqual(tank.weapon_type, "shell")
+        self.assertEqual(tank.armor_type, "heavy")
+        self.assertEqual(tank.attack_damage, 25)
+        self.assertEqual(tank.attack_range, 3)
+
+        # Test 2: Insufficient credits -> advance units instead
+        gs2 = GameState(GridMap(8, 8))
+        gs2.credits["Atreides"] = 100
+        u = Unit("Trike", "Atreides", 2, 2)
+        gs2.units.append(u)
+        enemy_building = Building("Barracks", "Harkonnen", 5, 5)
+        gs2.buildings.append(enemy_building)
+        result = gs2.step_ai_commander("Atreides")
+        self.assertEqual(result, "advanced_units")
+        self.assertEqual(u.x, 3)
+        self.assertEqual(u.y, 2)
+
+        # Test 3: No alive buildings -> advance units
+        gs3 = GameState(GridMap(8, 8))
+        gs3.credits["Atreides"] = 500
+        u3 = Unit("Trike", "Atreides", 2, 2)
+        gs3.units.append(u3)
+        result = gs3.step_ai_commander("Atreides")
+        self.assertEqual(result, "idle")
+
+        # Test 4: No combat units (only harvesters) -> idle
+        gs4 = GameState(GridMap(8, 8))
+        gs4.credits["Atreides"] = 100
+        harv = Unit("Harvester", "Atreides", 2, 2)
+        gs4.units.append(harv)
+        result = gs4.step_ai_commander("Atreides")
+        self.assertEqual(result, "idle")
+
+        # Test 5: Enough credits but no alive buildings -> advance units
+        gs5 = GameState(GridMap(8, 8))
+        gs5.credits["Atreides"] = 500
+        dead_b = Building("Barracks", "Atreides", 3, 3, hp=0)
+        gs5.buildings.append(dead_b)
+        u5 = Unit("Trike", "Atreides", 2, 2)
+        gs5.units.append(u5)
+        result = gs5.step_ai_commander("Atreides")
+        self.assertEqual(result, "idle")
+
+        # Test 6: Basic advance towards enemy
+        gs6 = GameState(GridMap(8, 8))
+        gs6.credits["Atreides"] = 100
+        u6 = Unit("Trike", "Atreides", 2, 2, hp=50)
+        gs6.units.append(u6)
+        enemy6 = Unit("Trike", "Harkonnen", 5, 5, hp=50)
+        gs6.units.append(enemy6)
+        result = gs6.step_ai_commander("Atreides")
+        self.assertEqual(result, "advanced_units")
+        self.assertEqual(u6.x, 3)
+        self.assertEqual(u6.y, 2)
+
+        # Test 7: No enemies nearby -> idle
+        gs7 = GameState(GridMap(8, 8))
+        gs7.credits["Atreides"] = 100
+        u7 = Unit("Trike", "Atreides", 4, 4, hp=50)
+        gs7.units.append(u7)
+        result = gs7.step_ai_commander("Atreides")
+        self.assertEqual(result, "idle")
+
+
 if __name__ == "__main__":
     unittest.main()

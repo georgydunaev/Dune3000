@@ -78,6 +78,8 @@ class Unit:
     armor_type: str = "heavy"
     attack_damage: int = 20
     attack_range: int = 3
+    xp: int = 0
+    rank: int = 0
 
     def move_towards(self, target_x: int, target_y: int, game_map: "GridMap") -> Tuple[int, int]:
         """
@@ -115,6 +117,25 @@ class Unit:
         self.x = nx
         self.y = ny
         return (self.x, self.y)
+
+    def gain_xp(self, amount: int) -> int:
+        """
+        Gain experience and promote rank if thresholds met.
+
+        - Increases self.xp by max(0, amount).
+        - When self.xp >= 100 and self.rank < 1, promotes to rank 1 and increases attack_damage by 5.
+        - When self.xp >= 250 and self.rank < 2, promotes to rank 2 and increases attack_damage by additional 5 (total +10 over base if jumping from rank 0 to rank 2).
+
+        Returns self.rank.
+        """
+        self.xp += max(0, amount)
+        if self.xp >= 250 and self.rank < 2:
+            self.rank = 2
+            self.attack_damage += 5
+        if self.xp >= 100 and self.rank < 1:
+            self.rank = 1
+            self.attack_damage += 5
+        return self.rank
 
 
     def step_harvest(self, game_map: "GridMap", refinery: Optional[Building], game_state: "GameState") -> int:
@@ -403,6 +424,82 @@ class GameState:
         )
         self.units.append(unit)
         return unit
+
+    def step_ai_commander(self, house: str) -> str:
+        """AI commander step: spend excess credits to reinforce army or direct combat units.
+
+        If the house has at least 200 credits and owns at least one alive building,
+        deduct 200 credits, spawn a CombatTank at the first alive building's position,
+        append it to self.units, and return "spawned_tank".
+
+        Otherwise, find all alive combat units (unit_type != "Harvester") owned by house
+        and move each one 1 step toward the nearest alive enemy unit or building.
+        Return "advanced_units" if at least one unit moved, or "idle" otherwise.
+        """
+        # If house has enough credits and at least one alive building, spawn a tank
+        if self.credits.get(house, 0) >= 200:
+            alive_buildings = [b for b in self.buildings if b.house == house and b.hp > 0]
+            if alive_buildings:
+                b = alive_buildings[0]
+                self.credits[house] = self.credits.get(house, 0) - 200
+                tank = Unit(
+                    unit_type="CombatTank",
+                    house=house,
+                    x=b.x,
+                    y=b.y,
+                    hp=120,
+                    max_hp=120,
+                    weapon_type="shell",
+                    armor_type="heavy",
+                    attack_damage=25,
+                    attack_range=3,
+                )
+                self.units.append(tank)
+                return "spawned_tank"
+
+        # Otherwise: move combat units toward nearest enemy
+        combat_units = [
+            u for u in self.units
+            if u.house == house and u.hp > 0 and u.unit_type != "Harvester"
+        ]
+
+        if not combat_units:
+            return "idle"
+
+        moved_any = False
+        for unit in combat_units:
+            # Save position before moving
+            old_x, old_y = unit.x, unit.y
+
+            # Find nearest alive enemy unit or building
+            nearest_dist = 10**9
+            nearest_target = None
+
+            # Check enemy units
+            for other in self.units:
+                if other.house != house and other.hp > 0:
+                    dist = abs(unit.x - other.x) + abs(unit.y - other.y)
+                    if dist < nearest_dist:
+                        nearest_dist = dist
+                        nearest_target = other
+
+            # Check enemy buildings
+            for b in self.buildings:
+                if b.house != house and b.hp > 0:
+                    dist = abs(unit.x - b.x) + abs(unit.y - b.y)
+                    if dist < nearest_dist:
+                        nearest_dist = dist
+                        nearest_target = b
+
+            # Move toward the nearest target
+            if nearest_target is not None:
+                unit.move_towards(nearest_target.x, nearest_target.y, self.game_map)
+                if unit.x != old_x or unit.y != old_y:
+                    moved_any = True
+
+        if moved_any:
+            return "advanced_units"
+        return "idle"
 
     def construct_building(self, house: str, building_type: str, x: int, y: int) -> Optional[Building]:
         cost = BUILDING_COSTS.get(building_type, 250)

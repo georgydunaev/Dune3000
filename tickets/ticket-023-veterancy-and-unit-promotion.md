@@ -1,6 +1,6 @@
 # Ticket 23: Implement Unit Experience & Veterancy Promotion (`Unit.gain_xp`)
 
-**State:** open
+**State:** closed
 **Labels:** dune3000, combat, gameplay
 
 ## Context
