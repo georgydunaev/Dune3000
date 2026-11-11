@@ -431,7 +431,7 @@
     <div id="tab-tactical" class="tab-content">
       <button id="btn-select-mode" class="btn-prod active" onclick="setMode('select')">Select / Marquee Box</button>
       <button id="btn-step-tick" class="btn-prod" onclick="stepTick()">Step Tick</button>
-      <button id="btn-autoplay" class="btn-prod active" onclick="cycleAutoplayMode()">Auto-Play: Spectator (Both AI)</button>
+      <button id="btn-autoplay" class="btn-prod" onclick="cycleAutoplayMode()">Auto-Play: OFF</button>
       <button id="btn-gpu" class="btn-prod btn-special" onclick="toggleGpuMode()" title="Harkonnen commander driven by local GPU LLM; fallback to Script AI if busy">Play against GPU: OFF</button>
       <button id="btn-sound" class="btn-prod" onclick="toggleSound()">Sound: ON</button>
     </div>
@@ -842,9 +842,9 @@
     let selectionEnabled = true;
     let tickCount = 0;
     let credits = { Atreides: 1200, Harkonnen: 1200 };
-    // Auto-Play Modes: 'both' (Spectator: Both AI), 'opponent' (Player vs Harkonnen AI), 'off' (Manual)
-    let autoplayMode = 'both';
-    let autoplay = true;
+    // Auto-Play Modes: 'off' (Manual Player Control), 'opponent' (Player vs Harkonnen AI), 'both' (Spectator: Both AI)
+    let autoplayMode = 'off';
+    let autoplay = false;
     let autoPlayTimer = 0;
     let screenFlash = 0; // Screen flash flare for superweapons and nuclear strikes
 
@@ -2019,12 +2019,9 @@
       });
 
       // Automated Building Repair
+      // Building repairs are performed by Field Engineers or via the Repair button (no passive credit drain)
       buildings.forEach(b => {
-        if (b.hp > 0 && b.hp < b.maxHp * 0.85 && credits[b.house] >= 4) {
-          b.hp = Math.min(b.maxHp, b.hp + 12);
-          credits[b.house] -= 2;
-          addRepairSparks(b.x * TILE + 14, b.y * TILE + 14);
-        }
+        // Subtle ambient dust or wear indicator without auto-spending player credits
       });
 
       // Defensive Turrets & SAM Air Defense Auto-Fire
