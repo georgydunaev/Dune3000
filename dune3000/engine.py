@@ -14,7 +14,7 @@ SPICE_THICK = "SPICE_THICK"
 
 HOUSES = ("Atreides", "Harkonnen", "Ordos")
 
-UNIT_COSTS: Dict[str, int] = {"Trike": 150, "CombatTank": 300, "Harvester": 400}
+UNIT_COSTS: Dict[str, int] = {"Trike": 150, "CombatTank": 300, "Harvester": 400, "Engineer": 200}
 
 BUILDING_COSTS: Dict[str, int] = {"WindTrap": 200, "Refinery": 400, "Barracks": 250, "Silo": 150, "Starport": 500, "Palace": 600, "GunTurret": 250, "RocketTurret": 350}
 
@@ -745,6 +745,38 @@ class GameState:
         self.buildings.remove(building)
         self.add_credits(building.house, refund)
         return refund
+
+    def capture_building(self, unit: Unit, building: Building) -> bool:
+        """Capture an adjacent enemy building using an Engineer infantry unit.
+
+        Returns False if:
+        - unit is not an Engineer
+        - unit is dead (hp <= 0)
+        - building is dead (hp <= 0)
+        - unit and building belong to the same house
+        - Manhattan distance between unit and building > 1
+
+        Otherwise:
+        - switches building.house to unit.house
+        - heals building up to 100 HP (clamped at max_hp)
+        - consumes the Engineer (sets unit.hp = 0, removes from self.units)
+        - returns True
+        """
+        if (
+            unit.unit_type != "Engineer"
+            or unit.hp <= 0
+            or building.hp <= 0
+            or unit.house == building.house
+            or abs(unit.x - building.x) + abs(unit.y - building.y) > 1
+        ):
+            return False
+
+        building.house = unit.house
+        building.hp = min(building.max_hp, building.hp + 100)
+        unit.hp = 0
+        if unit in self.units:
+            self.units.remove(unit)
+        return True
 
     def to_dict(self) -> Dict:
         """Serialize the game state to a dictionary for JSON snapshot.

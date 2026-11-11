@@ -1184,6 +1184,47 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertEqual(refund3, 0)
         self.assertEqual(gs.credits["Atreides"], 800)
 
+    def test_capture_building(self):
+        """test_capture_building: Engineer captures adjacent enemy building, heals up to 100 HP, consumed."""
+        from dune3000.engine import UNIT_COSTS
+        self.assertEqual(UNIT_COSTS.get("Engineer"), 200)
+
+        gm = GridMap(10, 10)
+        gs = GameState(gm)
+
+        # 1. Adjacent enemy building capture
+        target_b = Building("Refinery", "Harkonnen", 3, 3, hp=150, max_hp=400)
+        engineer = Unit("Engineer", "Atreides", 3, 2, hp=50)  # adjacent dist=1
+        gs.buildings.append(target_b)
+        gs.units.append(engineer)
+
+        success = gs.capture_building(engineer, target_b)
+        self.assertTrue(success)
+        self.assertEqual(target_b.house, "Atreides")
+        self.assertEqual(target_b.hp, 250)  # 150 + 100
+        self.assertEqual(engineer.hp, 0)
+        self.assertNotIn(engineer, gs.units)
+
+        # 2. Non-engineer cannot capture
+        tank = Unit("CombatTank", "Atreides", 3, 4, hp=100)
+        enemy_b = Building("Barracks", "Harkonnen", 3, 3, hp=200, max_hp=250)
+        gs.buildings.append(enemy_b)
+        gs.units.append(tank)
+        self.assertFalse(gs.capture_building(tank, enemy_b))
+        self.assertEqual(enemy_b.house, "Harkonnen")
+
+        # 3. Out-of-range engineer (dist > 1) cannot capture
+        far_eng = Unit("Engineer", "Atreides", 5, 5, hp=50)
+        gs.units.append(far_eng)
+        self.assertFalse(gs.capture_building(far_eng, enemy_b))
+        self.assertEqual(enemy_b.house, "Harkonnen")
+        self.assertEqual(far_eng.hp, 50)
+
+        # 4. Same house building cannot be captured
+        friendly_b = Building("Silo", "Atreides", 5, 4, hp=100, max_hp=150)
+        gs.buildings.append(friendly_b)
+        self.assertFalse(gs.capture_building(far_eng, friendly_b))
+
 
 if __name__ == "__main__":
     unittest.main()
