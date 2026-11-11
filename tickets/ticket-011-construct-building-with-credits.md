@@ -1,6 +1,6 @@
 # Ticket 11: Implement Building Construction with Credit Cost (`GameState.construct_building`)
 
-**State:** open
+**State:** closed
 **Priority:** high
 
 ## Description

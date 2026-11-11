@@ -16,6 +16,8 @@ HOUSES = ("Atreides", "Harkonnen", "Ordos")
 
 UNIT_COSTS: Dict[str, int] = {"Trike": 150, "CombatTank": 300, "Harvester": 400}
 
+BUILDING_COSTS: Dict[str, int] = {"WindTrap": 200, "Refinery": 400, "Barracks": 250, "Silo": 150}
+
 
 @dataclass
 class Building:
@@ -261,6 +263,16 @@ class GameState:
         unit = Unit(unit_type=unit_type, house=house, x=x, y=y)
         self.units.append(unit)
         return unit
+
+    def construct_building(self, house: str, building_type: str, x: int, y: int) -> Optional[Building]:
+        cost = BUILDING_COSTS.get(building_type, 250)
+        if self.credits.get(house, 0) < cost:
+            return None
+        self.credits[house] -= cost
+        power_produced = 100 if building_type == "WindTrap" else 0
+        power_consumed = 0 if building_type == "WindTrap" else 30
+        b = Building(building_type=building_type, house=house, x=x, y=y, power_produced=power_produced, power_consumed=power_consumed)
+        return self.place_building(b)
 
 
 def compute_damage(weapon_type: str, armor_type: str, base_damage: int) -> int:
