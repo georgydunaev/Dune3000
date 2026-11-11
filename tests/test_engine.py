@@ -1251,6 +1251,73 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertEqual(u_rock.hp, 100)
         self.assertEqual(u_far.hp, 100)
 
+    def test_saboteur(self):
+        """test_saboteur: fast 2-step movement, worm ignore, instant demolition of building & death."""
+        from dune3000.engine import UNIT_COSTS
+        self.assertEqual(UNIT_COSTS.get("Saboteur"), 250)
+
+        gm = GridMap(10, 10)
+        gs = GameState(gm)
+
+        # 1. Saboteur stats and 2-step movement with bounds clamping
+        sab = Unit("Saboteur", "Ordos", 0, 0)
+        self.assertEqual(sab.hp, 45)
+        self.assertEqual(sab.max_hp, 45)
+        self.assertEqual(sab.move_steps, 2)
+        self.assertEqual(sab.attack_damage, 0)
+        self.assertEqual(sab.attack_range, 0)
+        self.assertEqual(sab.armor_type, "infantry")
+
+        # Move towards (5, 0): moves 2 tiles along X
+        sab.move_towards(5, 0, gm)
+        self.assertEqual((sab.x, sab.y), (2, 0))
+
+        # Clamp against map bounds: move towards (-10, 0)
+        sab.move_towards(-10, 0, gm)
+        self.assertEqual((sab.x, sab.y), (0, 0))
+
+        # Cannot attack directly (returns 0)
+        dummy_enemy = Unit("Trike", "Atreides", 0, 1, hp=100)
+        self.assertEqual(sab.attack(dummy_enemy), 0)
+        self.assertEqual(dummy_enemy.hp, 100)
+
+        # 2. Sandworm ignores Saboteur
+        worm = Sandworm(1, 0)
+        gs.units.append(sab)
+        # Even though sab is on SAND and adjacent to worm, worm ignores sab
+        target = worm.find_nearest_target(gs.units, gm)
+        self.assertIsNone(target)
+
+        # 3. Successful sabotage: adjacent enemy building (dist <= 1)
+        target_b = Building("WindTrap", "Atreides", 1, 0, hp=400, max_hp=400)
+        gs.buildings.append(target_b)
+        res = gs.sabotage(sab, target_b)
+        self.assertTrue(res)
+        self.assertEqual(target_b.hp, 0)
+        self.assertEqual(sab.hp, 0)
+
+        # 4. Dead saboteur rejection
+        res_dead_sab = gs.sabotage(sab, target_b)
+        self.assertFalse(res_dead_sab)
+
+        # 5. Same-house sabotage rejection
+        sab2 = Unit("Saboteur", "Atreides", 2, 2)
+        friendly_b = Building("Barracks", "Atreides", 2, 3, hp=250)
+        self.assertFalse(gs.sabotage(sab2, friendly_b))
+        self.assertEqual(friendly_b.hp, 250)
+        self.assertEqual(sab2.hp, 45)
+
+        # 6. Out-of-range sabotage rejection (dist > 1)
+        enemy_far_b = Building("Barracks", "Harkonnen", 5, 5, hp=250)
+        self.assertFalse(gs.sabotage(sab2, enemy_far_b))
+        self.assertEqual(enemy_far_b.hp, 250)
+        self.assertEqual(sab2.hp, 45)
+
+        # 7. Dead-target rejection
+        enemy_dead_b = Building("Barracks", "Harkonnen", 2, 1, hp=0)
+        self.assertFalse(gs.sabotage(sab2, enemy_dead_b))
+        self.assertEqual(sab2.hp, 45)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -14,7 +14,7 @@ SPICE_THICK = "SPICE_THICK"
 
 HOUSES = ("Atreides", "Harkonnen", "Ordos")
 
-UNIT_COSTS: Dict[str, int] = {"Trike": 150, "CombatTank": 300, "Harvester": 400, "Engineer": 200}
+UNIT_COSTS: Dict[str, int] = {"Trike": 150, "CombatTank": 300, "Harvester": 400, "Engineer": 200, "Saboteur": 250}
 
 BUILDING_COSTS: Dict[str, int] = {"WindTrap": 200, "Refinery": 400, "Barracks": 250, "Silo": 150, "Starport": 500, "Palace": 600, "GunTurret": 250, "RocketTurret": 350}
 
@@ -80,42 +80,63 @@ class Unit:
     attack_range: int = 3
     xp: int = 0
     rank: int = 0
+    move_steps: int = 1
+
+    def __post_init__(self):
+        if self.unit_type == "Saboteur":
+            if self.hp == 100 and self.max_hp == 100:
+                self.hp = 45
+                self.max_hp = 45
+            if self.weapon_type == "bullet":
+                self.weapon_type = "none"
+            if self.armor_type == "heavy":
+                self.armor_type = "infantry"
+            if self.attack_damage == 20:
+                self.attack_damage = 0
+            if self.attack_range == 3:
+                self.attack_range = 0
+            if self.move_steps == 1:
+                self.move_steps = 2
 
     def move_towards(self, target_x: int, target_y: int, game_map: "GridMap") -> Tuple[int, int]:
         """
-        Move one step towards the target position.
+        Move one step (or multiple steps per move_steps) towards the target position.
 
         Movement order:
         1. Move along X axis towards target_x (1 tile step).
         2. If X didn't change, move along Y axis towards target_y (1 tile step).
         3. Clamp resulting coordinates to game_map bounds.
         4. Update self.x and self.y, return the new position.
+        Repeats self.move_steps times.
         """
-        # Step 1: Move along X axis
-        if self.x < target_x:
-            nx = self.x + 1
-        elif self.x > target_x:
-            nx = self.x - 1
-        else:
-            nx = self.x
+        steps = getattr(self, "move_steps", 1)
+        for _ in range(steps):
+            # Step 1: Move along X axis
+            if self.x < target_x:
+                nx = self.x + 1
+            elif self.x > target_x:
+                nx = self.x - 1
+            else:
+                nx = self.x
 
-        # Step 2: Move along Y axis only if X didn't change
-        if nx != self.x:
-            ny = self.y
-        elif self.y < target_y:
-            ny = self.y + 1
-        elif self.y > target_y:
-            ny = self.y - 1
-        else:
-            ny = self.y
+            # Step 2: Move along Y axis only if X didn't change
+            if nx != self.x:
+                ny = self.y
+            elif self.y < target_y:
+                ny = self.y + 1
+            elif self.y > target_y:
+                ny = self.y - 1
+            else:
+                ny = self.y
 
-        # Step 3: Clamp to game_map bounds
-        nx = max(0, min(game_map.width - 1, nx))
-        ny = max(0, min(game_map.height - 1, ny))
+            # Step 3: Clamp to game_map bounds
+            nx = max(0, min(game_map.width - 1, nx))
+            ny = max(0, min(game_map.height - 1, ny))
 
-        # Step 4: Update and return
-        self.x = nx
-        self.y = ny
+            # Step 4: Update coordinates
+            self.x = nx
+            self.y = ny
+
         return (self.x, self.y)
 
     def gain_xp(self, amount: int) -> int:
@@ -172,7 +193,7 @@ class Unit:
         If target is out of range (Manhattan distance > attack_range), returns 0.
         Otherwise, computes damage and reduces target's hp.
         """
-        if self.hp <= 0 or target.hp <= 0:
+        if self.hp <= 0 or target.hp <= 0 or self.unit_type == "Saboteur" or self.attack_damage <= 0:
             return 0
 
         dist = abs(self.x - target.x) + abs(self.y - target.y)
@@ -196,7 +217,7 @@ class Sandworm:
         best_unit: Optional[Unit] = None
         best_dist = 10**9
         for u in units:
-            if u.hp <= 0:
+            if u.hp <= 0 or u.unit_type == "Saboteur":
                 continue
             if game_map.get_tile(u.x, u.y) in safe_tiles:
                 continue
@@ -794,6 +815,30 @@ class GameState:
                         u.hp = max(0, u.hp - 15)
                         damaged_count += 1
         return damaged_count
+
+    def sabotage(self, saboteur: Unit, building: Building) -> bool:
+        """Sabotage an adjacent enemy building using a Saboteur.
+
+        Returns False without side effects if:
+        - either saboteur or building has hp <= 0
+        - saboteur and building belong to the same house
+        - Manhattan distance between saboteur and building > 1
+
+        Otherwise:
+        - sets building.hp = 0 and saboteur.hp = 0
+        - returns True
+        """
+        if (
+            saboteur.hp <= 0
+            or building.hp <= 0
+            or saboteur.house == building.house
+            or abs(saboteur.x - building.x) + abs(saboteur.y - building.y) > 1
+        ):
+            return False
+
+        building.hp = 0
+        saboteur.hp = 0
+        return True
 
     def to_dict(self) -> Dict:
         """Serialize the game state to a dictionary for JSON snapshot.
