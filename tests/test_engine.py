@@ -1,6 +1,7 @@
 import unittest
 from dune3000.engine import (
     CONCRETE,
+    DUNES,
     HOUSE_SPECIAL_UNITS,
     ROCK,
     SAND,
@@ -856,6 +857,31 @@ class TestDune3000Engine(unittest.TestCase):
         result = gs8.repair_building(b8, max_hp_to_restore=50)
         self.assertEqual(result, 0)
         self.assertEqual(b8.hp, 300)  # unchanged
+
+    def test_detonate_spice_bloom(self):
+        """Spice bloom converts center to SPICE_THICK and orthogonal SAND/DUNES to SPICE_THIN."""
+        gs = GameState(GridMap(8, 8))
+        # Corner-shaped terrain layout around the detonation point (3, 3):
+        # two orthogonal neighbors preserved as ROCK/CONCRETE, plus DUNES/SAND neighbors.
+        gs.game_map.set_tile(4, 3, ROCK)
+        gs.game_map.set_tile(2, 3, CONCRETE)
+        gs.game_map.set_tile(3, 4, DUNES)
+
+        count = gs.detonate_spice_bloom(3, 3)
+
+        # Center + 2 terrain neighbors ((3, 2) default SAND and (3, 4) DUNES) = 3 modified tiles.
+        self.assertEqual(count, 3)
+        self.assertEqual(gs.game_map.get_tile(3, 3), SPICE_THICK)
+        self.assertEqual(gs.game_map.get_tile(3, 2), SPICE_THIN)
+        self.assertEqual(gs.game_map.get_tile(3, 4), SPICE_THIN)
+        # ROCK/CONCRETE neighbors are preserved.
+        self.assertEqual(gs.game_map.get_tile(4, 3), ROCK)
+        self.assertEqual(gs.game_map.get_tile(2, 3), CONCRETE)
+
+        # Out-of-bounds detonation modifies nothing and returns 0.
+        self.assertEqual(gs.detonate_spice_bloom(-1, 3), 0)
+        self.assertEqual(gs.detonate_spice_bloom(8, 3), 0)
+        self.assertEqual(gs.game_map.get_tile(3, 3), SPICE_THICK)
 
     def test_generate_minimap_svg(self):
         """Verify generate_minimap_svg renders valid SVG containing terrain, house, and sandworm colors."""

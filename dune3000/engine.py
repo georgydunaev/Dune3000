@@ -458,6 +458,36 @@ class GameState:
 
         return actual_restore
 
+    def detonate_spice_bloom(self, x: int, y: int) -> int:
+        """Detonate a spice bloom at tile (x, y).
+
+        Converts the center tile to SPICE_THICK (unless it is ROCK or
+        CONCRETE, which are left untouched) and every in-bounds orthogonal
+        neighbor (4-directional) whose tile is SAND or DUNES to SPICE_THIN.
+
+        Returns:
+            The total number of tiles modified (int). Out-of-bounds
+            detonations modify nothing and return 0.
+        """
+        if not self.game_map.in_bounds(x, y):
+            return 0
+
+        modified = 0
+
+        center = self.game_map.get_tile(x, y)
+        if center not in (ROCK, CONCRETE):
+            self.game_map.set_tile(x, y, SPICE_THICK)
+            modified += 1
+
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if not self.game_map.in_bounds(nx, ny):
+                continue
+            if self.game_map.get_tile(nx, ny) in (SAND, DUNES):
+                self.game_map.set_tile(nx, ny, SPICE_THIN)
+                modified += 1
+
+        return modified
+
     def to_dict(self) -> Dict:
         """Serialize the game state to a dictionary for JSON snapshot.
         
