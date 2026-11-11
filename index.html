@@ -419,7 +419,7 @@
     <!-- TAB: SPECIAL & STARPORT -->
     <div id="tab-special" class="tab-content">
       <button id="btn-starport-order" class="btn-prod" onclick="orderStarportUnit()" data-req="Starport">Order CHOAM Market Shipment</button>
-      <button id="btn-fire-deathhand" class="btn-prod btn-special" onclick="setMode('DeathHand')" data-req="Palace">Fire Palace Superweapon Strike</button>
+      <button id="btn-fire-deathhand" class="btn-prod btn-special" onclick="setMode('DeathHand')" data-req="Palace">Fire Palace Death Hand Strike</button>
       <button id="btn-sell-mode" class="btn-prod" onclick="setMode('sell')">Sell Structure (50% Refund)</button>
     </div>
 
@@ -427,7 +427,7 @@
     <div id="tab-tactical" class="tab-content">
       <button id="btn-select-mode" class="btn-prod active" onclick="setMode('select')">Select / Marquee Box</button>
       <button id="btn-step-tick" class="btn-prod" onclick="stepTick()">Step Tick</button>
-      <button id="btn-autoplay" class="btn-prod" onclick="toggleAutoplay()">Auto-Play: ON</button>
+      <button id="btn-autoplay" class="btn-prod active" onclick="cycleAutoplayMode()">Auto-Play: Spectator (Both AI)</button>
       <button id="btn-gpu" class="btn-prod btn-special" onclick="toggleGpuMode()" title="Harkonnen commander driven by local GPU LLM; fallback to Script AI if busy">Play against GPU: OFF</button>
       <button id="btn-sound" class="btn-prod" onclick="toggleSound()">Sound: ON</button>
     </div>
@@ -834,8 +834,11 @@
     let selectionEnabled = true;
     let tickCount = 0;
     let credits = { Atreides: 1200, Harkonnen: 1200 };
+    // Auto-Play Modes: 'both' (Spectator: Both AI), 'opponent' (Player vs Harkonnen AI), 'off' (Manual)
+    let autoplayMode = 'both';
     let autoplay = true;
     let autoPlayTimer = 0;
+    let screenFlash = 0; // Screen flash flare for superweapons and nuclear strikes
 
     let isDragging = false;
     let dragStart = { x: 0, y: 0 };
@@ -1486,14 +1489,17 @@
       return cap;
     }
 
-    function trainUnit(unitType, cost) {
+    function trainUnit(unitType, cost, house = 'Atreides') {
       initAudio();
-      if (credits.Atreides < cost) {
-        logMsg(`Insufficient credits for ${unitType} (${cost} required).`, 'economy');
+      if ((credits[house] || 0) < cost) {
+        if (house === 'Atreides') {
+          playSound('error');
+          logMsg(`Insufficient credits for ${unitType} (${cost} required).`, 'economy');
+        }
         return;
       }
-      credits.Atreides -= cost;
-      playSound('build');
+      credits[house] -= cost;
+      if (house === 'Atreides') playSound('build');
 
       const isTank = unitType === 'CombatTank';
       const isTrike = unitType === 'Trike';
@@ -1507,6 +1513,7 @@
       const isOrni = unitType === 'Ornithopter';
       const isGunship = unitType === 'Gunship';
       const isBomber = unitType === 'Bomber';
+      const isHarv = unitType === 'Harvester';
       const isAir = isOrni || isGunship || isBomber;
 
       let hp = 100, dmg = 20, rng = 3.0, spd = 1.5;
@@ -1519,24 +1526,33 @@
       else if (isSiege) { hp = 130; dmg = 50; rng = 6.5; spd = 1.0; }
       else if (isMissile) { hp = 110; dmg = 40; rng = 5.8; spd = 1.4; }
       else if (isSonic) { hp = 160; dmg = 38; rng = 4.5; spd = 1.3; }
+      else if (isHarv) { hp = 120; dmg = 5; rng = 1.5; spd = 1.1; }
       else if (isOrni) { hp = 120; dmg = 25; rng = 4.5; spd = 4.2; }
       else if (isGunship) { hp = 240; dmg = 45; rng = 5.5; spd = 3.4; }
       else if (isBomber) { hp = 200; dmg = 80; rng = 3.0; spd = 3.2; }
 
+      const spawnX = house === 'Atreides' ? 3.5 + Math.random() * 2.0 : (W - 4.5 - Math.random() * 2.0);
+      const spawnY = house === 'Atreides' ? 4.5 + Math.random() * 2.0 : (H - 4.5 - Math.random() * 2.0);
+      const targetX = house === 'Atreides' ? 6.5 + Math.random() * 4.0 : (W - 8.5 - Math.random() * 4.0);
+      const targetY = house === 'Atreides' ? 6.5 + Math.random() * 4.0 : (H - 8.5 - Math.random() * 4.0);
+
       const u = {
-        type: unitType, house: 'Atreides', x: 3.5, y: 4.5, tx: 6.5, ty: 6.5,
+        type: unitType, house: house, x: spawnX, y: spawnY, tx: targetX, ty: targetY,
         hp, maxHp: hp,
-        spice: 0, maxSpice: unitType === 'Harvester' ? 700 : 0,
+        spice: 0, maxSpice: isHarv ? 700 : 0,
         dmg, range: rng, speed: spd, turnSpeed: isAir ? 4.5 : 3.2,
-        angle: 0, turretAngle: 0,
-        isAir, orbitAngle: 0, wingPhase: 0,
+        angle: house === 'Atreides' ? 0 : Math.PI, turretAngle: house === 'Atreides' ? 0 : Math.PI,
+        isAir, orbitAngle: Math.random() * Math.PI * 2, wingPhase: 0,
         repairing: false, airlifted: false, wormPanic: false,
         retreatWarning: false, lastAttacker: null
       };
       units.push(u);
-      selectedUnits = [u];
-      selectedUnit = u;
-      logMsg(`Trained Atreides ${unitType}${isAir ? ' [Aviation Squadron]' : ''} at base.`, 'economy');
+      if (house === 'Atreides') {
+        selectedUnits = [u];
+        selectedUnit = u;
+      }
+      addDust(u.x * TILE, u.y * TILE);
+      logMsg(`Trained ${house} ${unitType}${isAir ? ' [Aviation Squadron]' : ''} at base.`, 'economy');
       updateUI();
     }
 
@@ -1730,29 +1746,7 @@
           setMode('select');
         }
       } else if (mode === 'DeathHand') {
-        playSound('cannon');
-        addExplosion(gx * TILE + 14, gy * TILE + 14, 48);
-        units.forEach(u => {
-          if (u.house !== 'Atreides' && u.hp > 0) {
-            const d = Math.hypot(u.x - gx, u.y - gy);
-            if (d < 1.0) u.hp = Math.max(0, u.hp - 150);
-            else if (d < 2.2) u.hp = Math.max(0, u.hp - 75);
-          }
-        });
-        buildings.forEach(b => {
-          if (b.house !== 'Atreides' && b.hp > 0) {
-            const d = Math.hypot(b.x - gx, b.y - gy);
-            if (d < 1.0) b.hp = Math.max(0, b.hp - 150);
-            else if (d < 2.2) b.hp = Math.max(0, b.hp - 75);
-          }
-        });
-        sandworms.forEach(w => {
-          if (w.hp > 0) {
-            const d = Math.hypot(w.x - gx, w.y - gy);
-            if (d < 2.5) damageSandworm(w, 350, 'Atreides');
-          }
-        });
-        logMsg(`Palace Superweapon Death Hand struck sector (${gx}, ${gy})!`, 'combat');
+        triggerDeathHandStrike(gx, gy, 'Atreides');
         setMode('select');
       } else if (mode === 'Concrete') {
         const spec = BUILDING_SPECS.Concrete || { cost: 50 };
@@ -1866,8 +1860,10 @@
       updateParticles(dt);
       updateFloatingTexts(dt);
 
-      ctx.clearRect(0, 0, 1344, 672);
+      // Proper Full-Canvas Clear
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       renderMap(now);
+      renderAtmosphere(now);
       renderBuildings(now);
       renderUnits(now);
       renderCarryalls(now);
@@ -1876,13 +1872,45 @@
       renderFloatingTexts();
       renderMarqueeBox();
 
+      // Screen Flash Flare for Superweapon Strikes
+      if (screenFlash > 0) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${screenFlash * 0.6})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        screenFlash = Math.max(0, screenFlash - dt * 2.5);
+      }
+
       renderRadar(now);
 
       requestAnimationFrame(gameLoop);
     }
 
+    /* Atmospheric Desert Heat Shimmer and Wind Dust Streaks */
+    function renderAtmosphere(animTime) {
+      const windPhase = (animTime * 0.0006) % 1.0;
+      ctx.save();
+      ctx.fillStyle = 'rgba(235, 185, 115, 0.04)';
+      for (let i = 0; i < 4; i++) {
+        const yOff = (i * 220 + animTime * 0.02) % (H * TILE);
+        ctx.beginPath();
+        ctx.moveTo(0, yOff);
+        ctx.lineTo(W * TILE, yOff + 40);
+        ctx.lineTo(W * TILE, yOff + 70);
+        ctx.lineTo(0, yOff + 30);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
     function stepTick() {
       tickCount++;
+
+      // Skirmish AI Commander Execution
+      if (autoplayMode === 'both') {
+        stepAiCommander('Atreides');
+        stepAiCommander('Harkonnen');
+      } else if (autoplayMode === 'opponent') {
+        stepAiCommander('Harkonnen');
+      }
 
       // Harvester spice processing
       units.forEach(u => {
@@ -1941,7 +1969,190 @@
       updateUI();
     }
 
+    /* =========================================================================
+       AUTONOMOUS SKIRMISH AI COMMANDER (Spectator Mode and Skirmish AI)
+       ========================================================================= */
+    function cycleAutoplayMode() {
+      if (autoplayMode === 'both') {
+        autoplayMode = 'opponent';
+        autoplay = true;
+        logMsg("Auto-Play Mode: Player vs Harkonnen AI Commander.", "sys");
+      } else if (autoplayMode === 'opponent') {
+        autoplayMode = 'off';
+        autoplay = false;
+        logMsg("Auto-Play Mode: OFF (Manual Tactical Control).", "sys");
+      } else {
+        autoplayMode = 'both';
+        autoplay = true;
+        logMsg("Auto-Play Mode: SPECTATOR (Both Atreides and Harkonnen AI Commanders active).", "sys");
+      }
+      updateAutoplayUI();
+      updateUI();
+    }
+
     function toggleAutoplay() {
+      cycleAutoplayMode();
+    }
+
+    function updateAutoplayUI() {
+      const btn = document.getElementById('btn-autoplay');
+      if (!btn) return;
+      if (autoplayMode === 'both') {
+        btn.textContent = 'Auto-Play: Spectator (Both AI)';
+        btn.className = 'btn-prod active';
+      } else if (autoplayMode === 'opponent') {
+        btn.textContent = 'Auto-Play: Player vs AI';
+        btn.className = 'btn-prod';
+      } else {
+        btn.textContent = 'Auto-Play: OFF';
+        btn.className = 'btn-prod';
+      }
+      const oppLabel = document.getElementById('hud-opponent');
+      if (oppLabel) {
+        oppLabel.textContent = autoplayMode === 'both' ? 'Both Factions AI (Spectator)' : (autoplayMode === 'opponent' ? 'Harkonnen AI' : 'Manual');
+      }
+    }
+
+    function stepAiCommander(house) {
+      const enemyHouse = house === 'Atreides' ? 'Harkonnen' : 'Atreides';
+      const myUnits = units.filter(u => u.house === house && u.hp > 0);
+      const enemyUnits = units.filter(u => u.house === enemyHouse && u.hp > 0);
+      const myBuildings = buildings.filter(b => b.house === house && b.hp > 0);
+      const enemyBuildings = buildings.filter(b => b.house === enemyHouse && b.hp > 0);
+
+      // 1. Autonomous Harvester Operations and Spice Field Targeting
+      myUnits.forEach(u => {
+        if (u.type === 'Harvester' && !u.airlifted && !u.wormPanic) {
+          if (u.spice === 0 && Math.hypot(u.tx - u.x, u.ty - u.y) < 1.0) {
+            // Find nearest rich unmined spice tile
+            let bestX = house === 'Atreides' ? 18.5 : W - 18.5;
+            let bestY = house === 'Atreides' ? 9.5 : H - 9.5;
+            let bestScore = -999;
+            for (let sy = 4; sy < H - 4; sy += 2) {
+              for (let sx = 8; sx < W - 8; sx += 2) {
+                if (tiles[sy] && (tiles[sy][sx] === 'SPICE_THICK' || tiles[sy][sx] === 'SPICE_THIN')) {
+                  const dist = Math.hypot(sx + 0.5 - u.x, sy + 0.5 - u.y);
+                  const spiceValue = tiles[sy][sx] === 'SPICE_THICK' ? 80 : 40;
+                  const score = spiceValue - dist;
+                  if (score > bestScore) {
+                    bestScore = score;
+                    bestX = sx + 0.5;
+                    bestY = sy + 0.5;
+                  }
+                }
+              }
+            }
+            u.tx = bestX;
+            u.ty = bestY;
+          }
+        }
+      });
+
+      // 2. Autonomous Reinforcement Training and War Production
+      const cred = credits[house] || 0;
+      const harvCount = myUnits.filter(u => u.type === 'Harvester').length;
+      const tankCount = myUnits.filter(u => u.type === 'CombatTank' || u.type === 'SiegeTank' || u.type === 'MissileTank').length;
+      const airCount = myUnits.filter(u => u.isAir).length;
+
+      if (cred >= 400 && harvCount < 2 && hasBuilding(house, 'Refinery')) {
+        trainUnit('Harvester', 400, house);
+      } else if (cred >= 600 && hasBuilding(house, 'Palace') && Math.random() < 0.35) {
+        if (house === 'Atreides') {
+          trainUnit('SonicTank', 600, house);
+        } else {
+          // Harkonnen Death Hand Superweapon Strike
+          const targetB = enemyBuildings[Math.floor(Math.random() * enemyBuildings.length)];
+          if (targetB) {
+            triggerDeathHandStrike(targetB.x, targetB.y, house);
+          }
+        }
+      } else if (cred >= 450 && hasBuilding(house, 'HeavyFactory') && Math.random() < 0.4) {
+        trainUnit(Math.random() < 0.5 ? 'SiegeTank' : 'MissileTank', 450, house);
+      } else if (cred >= 350 && hasBuilding(house, 'HighTech') && airCount < 4 && Math.random() < 0.45) {
+        trainUnit(Math.random() < 0.6 ? 'Ornithopter' : 'Gunship', 350, house);
+      } else if (cred >= 300 && hasBuilding(house, 'HeavyFactory')) {
+        trainUnit('CombatTank', 300, house);
+      } else if (cred >= 150 && (hasBuilding(house, 'LightFactory') || hasBuilding(house, 'HeavyFactory')) && Math.random() < 0.3) {
+        trainUnit(Math.random() < 0.5 ? 'Trike' : 'Quad', 150, house);
+      }
+
+      // 3. Autonomous Tactical Offensives and Flanking Orders
+      const combatUnits = myUnits.filter(u => !u.isAir && u.type !== 'Harvester' && !u.repairing && !u.wormPanic);
+      if (combatUnits.length >= 4) {
+        // Form a tactical battle column
+        const target = enemyUnits.length > 0
+          ? enemyUnits[Math.floor(Math.random() * enemyUnits.length)]
+          : (enemyBuildings.length > 0 ? enemyBuildings[0] : null);
+
+        if (target) {
+          combatUnits.forEach((u, idx) => {
+            if (Math.hypot(u.tx - u.x, u.ty - u.y) < 1.5 || Math.random() < 0.25) {
+              const row = Math.floor(idx / 4);
+              const col = idx % 4;
+              u.tx = Math.max(1, Math.min(W - 2, target.x + (col - 1.5) * 1.5));
+              u.ty = Math.max(1, Math.min(H - 2, target.y + (row - 1.5) * 1.5));
+            }
+          });
+        }
+      }
+
+      // 4. Autonomous Aviation Wing Sorties
+      const airUnits = myUnits.filter(u => u.isAir);
+      if (airUnits.length > 0 && Math.random() < 0.3) {
+        const airTarget = enemyUnits.length > 0 ? enemyUnits[Math.floor(Math.random() * enemyUnits.length)] : null;
+        if (airTarget) {
+          airUnits.forEach(a => {
+            a.tx = airTarget.x + (Math.random() - 0.5) * 2;
+            a.ty = airTarget.y + (Math.random() - 0.5) * 2;
+          });
+        }
+      }
+
+      // 5. Autonomous Concrete & Base Expansion
+      if (cred >= 180 && hasBuilding(house, 'ConstructionYard') && Math.random() < 0.2) {
+        if (!hasBuilding(house, 'Palace') && hasBuilding(house, 'Starport')) {
+          const spawnBase = house === 'Atreides' ? { x: 7, y: 7 } : { x: W - 8, y: H - 8 };
+          buildings.push({
+            type: 'Palace', house: house, x: spawnBase.x, y: spawnBase.y,
+            hp: 800, maxHp: 800, pProd: 0, pCons: 60
+          });
+          credits[house] -= 500;
+          logMsg(`${house} Citadel completed construction of Grand High Command Palace!`, 'economy');
+        }
+      }
+    }
+
+    function triggerDeathHandStrike(targetX, targetY, house = 'Atreides') {
+      playSound('cannon');
+      screenFlash = 1.0;
+      addExplosion((targetX + 0.5) * TILE, (targetY + 0.5) * TILE, 56);
+      addFloatingText("PALACE DEATH HAND IMPACT!", (targetX + 0.5) * TILE, (targetY + 0.5) * TILE - 24, '#f43f5e');
+      logMsg(`${house.toUpperCase()} PALACE SUPERWEAPON: Death Hand missile struck sector (${Math.round(targetX)}, ${Math.round(targetY)})!`, 'combat');
+
+      const enemyHouse = house === 'Atreides' ? 'Harkonnen' : 'Atreides';
+      units.forEach(u => {
+        if (u.house === enemyHouse && u.hp > 0) {
+          const d = Math.hypot(u.x - targetX, u.y - targetY);
+          if (d < 1.4) u.hp = Math.max(0, u.hp - 200);
+          else if (d < 3.2) u.hp = Math.max(0, u.hp - 90);
+        }
+      });
+      buildings.forEach(b => {
+        if (b.house === enemyHouse && b.hp > 0) {
+          const d = Math.hypot(b.x - targetX, b.y - targetY);
+          if (d < 1.4) b.hp = Math.max(0, b.hp - 220);
+          else if (d < 3.2) b.hp = Math.max(0, b.hp - 100);
+        }
+      });
+      sandworms.forEach(w => {
+        if (w.hp > 0) {
+          const d = Math.hypot(w.x - targetX, w.y - targetY);
+          if (d < 3.0) damageSandworm(w, 350, house);
+        }
+      });
+    }
+
+    function oldToggleAutoplay() {
       autoplay = !autoplay;
       document.getElementById('btn-autoplay').textContent = 'Auto-Play: ' + (autoplay ? 'ON' : 'OFF');
     }
@@ -2127,20 +2338,32 @@
         }
       }
 
-      // 3. Carryalls Airlift Flight (Harvesters & Critically Damaged Tanks)
+      // 3. Carryalls Full Round-Trip Airlift (Field to Refinery to Field and Medevac)
       carryalls.forEach(c => {
-        c.wingPhase = (c.wingPhase || 0) + dt * 14.0;
-        if (c.state === 'idle') {
-          const harv = units.find(u => u.house === c.house && u.type === 'Harvester' && u.hp > 0 && !u.airlifted && (u.spice >= u.maxSpice || u.wormPanic));
-          const damagedTank = units.find(u => u.house === c.house && u.hp > 0 && !u.airlifted && !u.isAir && u.type !== 'Harvester' && u.hp < u.maxHp * 0.45);
+        c.wingPhase = (c.wingPhase || 0) + dt * 15.0;
 
-          if (harv) {
+        if (c.state === 'idle') {
+          // Priority 1: Full Harvester in field or under worm panic
+          const harvFull = units.find(u => u.house === c.house && u.type === 'Harvester' && u.hp > 0 && !u.airlifted && (u.spice >= u.maxSpice || u.wormPanic));
+          // Priority 2: Badly damaged vehicle needing repair bay medevac
+          const damagedTank = units.find(u => u.house === c.house && u.hp > 0 && !u.airlifted && !u.isAir && u.type !== 'Harvester' && u.hp < u.maxHp * 0.45);
+          // Priority 3: Empty Harvester at Refinery ready to be airlifted OUT to spice field
+          const harvAtRef = units.find(u => {
+            if (u.house !== c.house || u.type !== 'Harvester' || u.hp <= 0 || u.airlifted || u.spice > 0) return false;
+            const ref = buildings.find(b => b.house === c.house && b.type === 'Refinery' && b.hp > 0);
+            return ref && Math.hypot(u.x - (ref.x + 0.5), u.y - (ref.y + 0.5)) < 1.8;
+          });
+
+          if (harvFull) {
             c.state = 'flying_to_harvester';
-            c.targetUnit = harv;
+            c.targetUnit = harvFull;
           } else if (damagedTank && hasBuilding(c.house, 'RepairFacility')) {
             c.state = 'flying_to_tank';
             c.targetUnit = damagedTank;
             logMsg(`${c.house} Carryall dispatched on emergency medevac airlift for damaged ${damagedTank.type}!`, 'air');
+          } else if (harvAtRef) {
+            c.state = 'flying_to_deploy_harvester';
+            c.targetUnit = harvAtRef;
           }
         } else if (c.state === 'flying_to_harvester' && c.targetUnit) {
           c.tx = c.targetUnit.x; c.ty = c.targetUnit.y;
@@ -2152,7 +2375,7 @@
             c.tx = ref ? ref.x + 0.5 : c.x;
             c.ty = ref ? ref.y + 0.5 : c.y;
             playSound('build');
-            logMsg(`${c.house} Carryall secured Harvester. Airlifting to Refinery!`, 'air');
+            logMsg(`${c.house} Carryall secured Harvester. Airlifting to Refinery dock!`, 'air');
           }
         } else if (c.state === 'flying_to_tank' && c.targetUnit) {
           c.tx = c.targetUnit.x; c.ty = c.targetUnit.y;
@@ -2166,23 +2389,86 @@
             playSound('build');
             logMsg(`${c.house} Carryall secured damaged ${c.targetUnit.type}. Airlifting to Repair Bay!`, 'air');
           }
+        } else if (c.state === 'flying_to_deploy_harvester' && c.targetUnit) {
+          c.tx = c.targetUnit.x; c.ty = c.targetUnit.y;
+          if (Math.hypot(c.x - c.targetUnit.x, c.y - c.targetUnit.y) < 0.6) {
+            c.carryingUnit = c.targetUnit;
+            c.targetUnit.airlifted = true;
+
+            // Find nearest rich unmined spice field
+            let bestField = null, bestDist = 999;
+            for (let sy = 3; sy < H - 3; sy++) {
+              for (let sx = 4; sx < W - 4; sx++) {
+                if (tiles[sy] && (tiles[sy][sx] === 'SPICE_THICK' || tiles[sy][sx] === 'SPICE_THIN')) {
+                  const d = Math.hypot(sx + 0.5 - c.x, sy + 0.5 - c.y);
+                  const effectiveDist = tiles[sy][sx] === 'SPICE_THICK' ? d * 0.7 : d;
+                  if (effectiveDist < bestDist) {
+                    bestDist = effectiveDist;
+                    bestField = { x: sx + 0.5, y: sy + 0.5 };
+                  }
+                }
+              }
+            }
+            c.tx = bestField ? bestField.x : (c.house === 'Atreides' ? 18.5 : W - 18.5);
+            c.ty = bestField ? bestField.y : 15.5;
+            c.state = 'carrying_to_spice_field';
+            playSound('build');
+            logMsg(`${c.house} Carryall secured empty Harvester at Refinery. Airlifting to spice field!`, 'air');
+          }
         } else if (c.state === 'carrying_to_refinery') {
           const ref = buildings.find(b => b.house === c.house && b.type === 'Refinery' && b.hp > 0);
           if (ref && Math.hypot(c.x - (ref.x + 0.5), c.y - (ref.y + 0.5)) < 0.6) {
             if (c.carryingUnit) {
-              c.carryingUnit.x = ref.x + 0.5;
-              c.carryingUnit.y = ref.y + 0.5;
-              c.carryingUnit.airlifted = false;
               const unloadedSpice = c.carryingUnit.spice || 0;
               credits[c.house] = Math.min(maxCapacity(c.house), credits[c.house] + unloadedSpice);
               addFloatingText(`+${unloadedSpice} Spice`, (ref.x + 0.5) * TILE, ref.y * TILE - 12, '#22c55e');
               c.carryingUnit.spice = 0;
               c.carryingUnit.wormPanic = false;
-              c.carryingUnit.tx = c.carryingUnit.x + (c.house === 'Atreides' ? 6 : -6);
-              c.carryingUnit.ty = c.carryingUnit.y + 5;
-              c.carryingUnit = null;
               playSound('harvest');
-              logMsg(`${c.house} Harvester spice cargo delivered via Carryall airlift!`, 'economy');
+              logMsg(`${c.house} Harvester spice unloaded at Refinery dock!`, 'economy');
+
+              // Now, seamlessly deliver Harvester back TO THE SPICE FIELD
+              let bestField = null, bestDist = 999;
+              for (let sy = 3; sy < H - 3; sy++) {
+                for (let sx = 4; sx < W - 4; sx++) {
+                  if (tiles[sy] && (tiles[sy][sx] === 'SPICE_THICK' || tiles[sy][sx] === 'SPICE_THIN')) {
+                    const d = Math.hypot(sx + 0.5 - ref.x, sy + 0.5 - ref.y);
+                    const effectiveDist = tiles[sy][sx] === 'SPICE_THICK' ? d * 0.7 : d;
+                    if (effectiveDist < bestDist) {
+                      bestDist = effectiveDist;
+                      bestField = { x: sx + 0.5, y: sy + 0.5 };
+                    }
+                  }
+                }
+              }
+              if (bestField) {
+                c.state = 'carrying_to_spice_field';
+                c.tx = bestField.x;
+                c.ty = bestField.y;
+                logMsg(`${c.house} Carryall airlifting Harvester directly to rich spice field at (${Math.round(bestField.x)}, ${Math.round(bestField.y)})!`, 'air');
+              } else {
+                c.carryingUnit.x = ref.x + 0.5;
+                c.carryingUnit.y = ref.y + 0.5;
+                c.carryingUnit.airlifted = false;
+                c.carryingUnit = null;
+                c.state = 'idle';
+              }
+            } else {
+              c.state = 'idle';
+            }
+          }
+        } else if (c.state === 'carrying_to_spice_field') {
+          if (Math.hypot(c.x - c.tx, c.y - c.ty) < 0.6) {
+            if (c.carryingUnit) {
+              c.carryingUnit.x = c.tx;
+              c.carryingUnit.y = c.ty;
+              c.carryingUnit.tx = c.tx;
+              c.carryingUnit.ty = c.ty;
+              c.carryingUnit.airlifted = false;
+              addDust(c.carryingUnit.x * TILE, c.carryingUnit.y * TILE);
+              playSound('harvest');
+              logMsg(`${c.house} Carryall deployed Harvester directly on rich spice field at (${Math.round(c.tx)}, ${Math.round(c.ty)})!`, 'air');
+              c.carryingUnit = null;
             }
             c.state = 'idle';
           }
@@ -2211,7 +2497,6 @@
           c.y += Math.sin(c.angle) * flightStep;
         }
       });
-
       // 4. Sandworms Undulation, Limited Sensory Detection Range & Subterranean Behavior
       sandworms.forEach(w => {
         if (!w.submerged && !w.dormant) {
@@ -2951,10 +3236,12 @@
         ctx.fill();
         ctx.restore();
 
-        // Carried Unit Suspension Cable & Unit
+        // Carried Unit Magnetic Suspension Clamp Beam & Unit
         if (c.carryingUnit) {
-          ctx.strokeStyle = '#cbd5e1';
-          ctx.lineWidth = 1.2;
+          // Pulsing cyan and amber magnetic clamp cables
+          const clampGlow = 0.5 + 0.5 * Math.sin(animTime * 0.015);
+          ctx.strokeStyle = `rgba(56, 189, 248, ${0.7 + clampGlow * 0.3})`;
+          ctx.lineWidth = 1.8;
           ctx.beginPath();
           ctx.moveTo(cx - 6, cy); ctx.lineTo(cx - 4, cy + 8);
           ctx.moveTo(cx + 6, cy); ctx.lineTo(cx + 4, cy + 8);
