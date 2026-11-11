@@ -210,6 +210,7 @@ class GridMap:
 @dataclass
 class GameState:
     game_map: GridMap = field(default_factory=GridMap)
+    tick_count: int = 0
     credits: Dict[str, int] = field(default_factory=lambda: {h: 1000 for h in HOUSES})
     buildings: List[Building] = field(default_factory=list)
     units: List[Unit] = field(default_factory=list)
@@ -273,6 +274,44 @@ class GameState:
         power_consumed = 0 if building_type == "WindTrap" else 30
         b = Building(building_type=building_type, house=house, x=x, y=y, power_produced=power_produced, power_consumed=power_consumed)
         return self.place_building(b)
+
+    def step_tick(self) -> Dict[str, int]:
+        """Execute one simulation tick step.
+        
+        - Increment tick counter.
+        - Remove destroyed buildings and units.
+        - Process harvester spice deposition at refineries.
+        - Return tick state summary.
+        """
+        self.tick_count += 1
+        
+        # Remove destroyed buildings
+        self.buildings = [b for b in self.buildings if b.hp > 0]
+        
+        # Remove destroyed units
+        self.units = [u for u in self.units if u.hp > 0]
+        
+        # Process harvester spice deposition
+        total_deposited = 0
+        for u in self.units:
+            if u.unit_type == "Harvester":
+                # Find the first refinery matching the harvester's house
+                refinery = None
+                for b in self.buildings:
+                    if b.house == u.house and b.building_type == "Refinery":
+                        refinery = b
+                        break
+                # Call step_harvest and accumulate deposited spice
+                if refinery is not None:
+                    deposited = u.step_harvest(self.game_map, refinery, self)
+                    total_deposited += deposited
+        
+        return {
+            "tick": self.tick_count,
+            "spice_deposited": total_deposited,
+            "alive_units": len(self.units),
+            "alive_buildings": len(self.buildings),
+        }
 
 
 def compute_damage(weapon_type: str, armor_type: str, base_damage: int) -> int:
