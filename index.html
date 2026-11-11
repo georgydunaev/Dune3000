@@ -309,6 +309,8 @@
         <option value="medium" selected>Medium (1200 Credits, Standard)</option>
         <option value="hard">Hard (600 Credits, 2 Ferocious Worms)</option>
       </select>
+      <button id="btn-toggle-select" class="btn-prod" onclick="toggleSelection()">Select: ON</button>
+      <button id="btn-clear-select" class="btn-prod" onclick="clearSelection()">Deselect All</button>
       <button class="btn-prod btn-special" onclick="restartMission()">Restart Mission</button>
     </div>
   </header>
@@ -422,19 +424,33 @@
     </div>
   </div>
 
+  <!-- DYNAMIC SELECTION INSPECTOR -->
+  <div id="selection-inspector" style="display:none; padding: 6px 16px; background: rgba(15, 23, 42, 0.95); border-bottom: 1px solid #334155; font-size: 12px; color: #f8fafc; align-items: center; justify-content: space-between;">
+    <div style="display:flex; align-items:center; gap: 14px;">
+      <span id="inspect-title" style="font-weight: bold; color: #38bdf8;">Selected: None</span>
+      <span id="inspect-hp" style="color: #cbd5e1;">HP: -</span>
+      <span id="inspect-info" style="color: #94a3b8;">Status: -</span>
+    </div>
+    <div style="display:flex; align-items:center; gap: 8px;">
+      <button id="inspect-btn-repair" class="btn-prod" style="padding: 3px 8px; font-size: 11px;" onclick="inspectAction('repair')">Repair Structure</button>
+      <button id="inspect-btn-sell" class="btn-prod" style="padding: 3px 8px; font-size: 11px;" onclick="inspectAction('sell')">Sell Structure</button>
+      <button class="btn-prod" style="padding: 3px 8px; font-size: 11px;" onclick="clearSelection()">Dismiss</button>
+    </div>
+  </div>
+
   <div id="main-area">
     <div id="viewport-wrapper">
       <div id="canvas-container">
-        <canvas id="gameCanvas" width="1344" height="672"></canvas>
+        <canvas id="gameCanvas" width="1344" height="756"></canvas>
       </div>
     </div>
     <div id="sidebar">
       <div class="panel-box">
         <div class="panel-header">
-          <span>Arrakis Radar (48x24)</span>
+          <span>Arrakis Radar (48x27)</span>
           <span id="radar-status" style="color:#22c55e">ONLINE</span>
         </div>
-        <canvas id="radar-canvas" width="288" height="144"></canvas>
+        <canvas id="radar-canvas" width="288" height="162"></canvas>
       </div>
       <div class="panel-box">
         <div class="panel-header">
@@ -690,7 +706,7 @@
     /* =========================================================================
        WORLD & ENGINE CONSTANTS (48x24 Battlefield)
        ========================================================================= */
-    const TILE = 28, W = 48, H = 24;
+    const TILE = 28, W = 48, H = 27;
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const radarCanvas = document.getElementById('radar-canvas');
@@ -728,6 +744,8 @@
     let mode = 'select';
     let selectedUnits = [];
     let selectedUnit = null;
+    let selectedBuilding = null;
+    let selectionEnabled = true;
     let tickCount = 0;
     let credits = { Atreides: 1200, Harkonnen: 1200 };
     let autoplay = true;
@@ -752,21 +770,25 @@
     function initMap() {
       tiles = Array.from({ length: H }, (_, y) =>
         Array.from({ length: W }, (_, x) => {
-          if (x <= 7 && y <= 7) {
-            if ((x >= 1 && x <= 6 && y >= 1 && y <= 6)) return 'CONCRETE';
+          // Atreides Base Plateau (all starting structures paved on CONCRETE)
+          if (x <= 9 && y <= 10) {
+            if (x >= 1 && x <= 9 && y >= 1 && y <= 10) return 'CONCRETE';
             return 'ROCK';
           }
-          if (x >= W - 8 && y >= H - 8) {
-            if ((x >= W - 7 && x <= W - 2 && y >= H - 7 && y <= H - 2)) return 'CONCRETE';
+          // Harkonnen Base Plateau
+          if (x >= W - 11 && y >= H - 11) {
+            if (x >= W - 10 && x <= W - 2 && y >= H - 10 && y <= H - 2) return 'CONCRETE';
             return 'ROCK';
           }
-          if ((x === 20 && y <= 8) || (x === 27 && y >= 15)) return 'MOUNTAIN';
-          if (Math.hypot(x - 14, y - 5) < 2.2 || Math.hypot(x - 34, y - 18) < 2.2) return 'CRATER';
-          if (Math.hypot(x - 12, y - 17) < 2.0 || Math.hypot(x - 36, y - 6) < 2.0) return 'ROCK';
+          // Mountains & Craters
+          if ((x === 20 && y <= 9) || (x === 27 && y >= 17)) return 'MOUNTAIN';
+          if (Math.hypot(x - 14, y - 6) < 2.2 || Math.hypot(x - 34, y - 21) < 2.2) return 'CRATER';
+          if (Math.hypot(x - 12, y - 19) < 2.0 || Math.hypot(x - 36, y - 7) < 2.0) return 'ROCK';
 
-          if (Math.hypot(x - 24, y - 12) < 3.2) return (x + y) % 2 === 0 ? 'SPICE_THICK' : 'SPICE_THIN';
-          if (Math.hypot(x - 16, y - 11) < 2.2 || Math.hypot(x - 32, y - 13) < 2.2) return 'SPICE_THIN';
-          if (Math.hypot(x - 8, y - 14) < 1.8 || Math.hypot(x - 40, y - 9) < 1.8) return 'SPICE_THIN';
+          // Rich Arrakis Spice Basin at center
+          if (Math.hypot(x - 24, y - 13.5) < 3.8) return (x + y) % 2 === 0 ? 'SPICE_THICK' : 'SPICE_THIN';
+          if (Math.hypot(x - 16, y - 12) < 2.4 || Math.hypot(x - 32, y - 15) < 2.4) return 'SPICE_THIN';
+          if (Math.hypot(x - 8, y - 16) < 2.0 || Math.hypot(x - 40, y - 10) < 2.0) return 'SPICE_THIN';
 
           if ((x * 5 + y * 7) % 13 === 0) return 'DUNES';
           return 'SAND';
@@ -779,57 +801,121 @@
        ========================================================================= */
     function resetMissionState() {
       initMap();
-      const startCredits = difficulty === 'easy' ? 2500 : (difficulty === 'hard' ? 600 : 1200);
+      const startCredits = difficulty === 'easy' ? 4500 : (difficulty === 'hard' ? 1200 : 2500);
       credits = { Atreides: startCredits, Harkonnen: startCredits };
       tickCount = 0;
       selectedUnits = [];
       selectedUnit = null;
+      selectedBuilding = null;
       particles = [];
 
+      // Fully-Built Bases with all Dune 2000 structures already constructed on Concrete
       buildings = [
+        // === ATREIDES ADVANCED CITADEL BASE ===
         { type: 'ConstructionYard', house: 'Atreides', x: 2, y: 2, hp: 600, maxHp: 600, pProd: 50, pCons: 0 },
         { type: 'WindTrap', house: 'Atreides', x: 4, y: 2, hp: 400, maxHp: 400, pProd: 120, pCons: 0 },
+        { type: 'WindTrap', house: 'Atreides', x: 6, y: 2, hp: 400, maxHp: 400, pProd: 120, pCons: 0 },
         { type: 'Refinery', house: 'Atreides', x: 2, y: 4, hp: 450, maxHp: 450, pProd: 0, pCons: 35 },
         { type: 'Outpost', house: 'Atreides', x: 4, y: 4, hp: 400, maxHp: 400, pProd: 0, pCons: 40 },
-        { type: 'RepairFacility', house: 'Atreides', x: 2, y: 6, hp: 400, maxHp: 400, pProd: 0, pCons: 30 },
-        { type: 'GunTurret', house: 'Atreides', x: 6, y: 5, hp: 350, maxHp: 350, pProd: 0, pCons: 20, range: 4.5, dmg: 22 },
+        { type: 'Silo', house: 'Atreides', x: 6, y: 4, hp: 300, maxHp: 300, pProd: 0, pCons: 10 },
+        { type: 'Barracks', house: 'Atreides', x: 2, y: 6, hp: 350, maxHp: 350, pProd: 0, pCons: 20 },
+        { type: 'HeavyFactory', house: 'Atreides', x: 4, y: 6, hp: 550, maxHp: 550, pProd: 0, pCons: 50 },
+        { type: 'HighTech', house: 'Atreides', x: 6, y: 6, hp: 450, maxHp: 450, pProd: 0, pCons: 45 },
+        { type: 'RepairFacility', house: 'Atreides', x: 2, y: 8, hp: 400, maxHp: 400, pProd: 0, pCons: 30 },
+        { type: 'Starport', house: 'Atreides', x: 4, y: 8, hp: 500, maxHp: 500, pProd: 0, pCons: 40 },
+        { type: 'Palace', house: 'Atreides', x: 6, y: 8, hp: 800, maxHp: 800, pProd: 0, pCons: 60 },
+        { type: 'GunTurret', house: 'Atreides', x: 8, y: 2, hp: 350, maxHp: 350, pProd: 0, pCons: 20, range: 4.5, dmg: 22 },
+        { type: 'RocketTurret', house: 'Atreides', x: 8, y: 5, hp: 350, maxHp: 350, pProd: 0, pCons: 45, range: 6.5, dmg: 45 },
+        { type: 'GunTurret', house: 'Atreides', x: 8, y: 8, hp: 350, maxHp: 350, pProd: 0, pCons: 20, range: 4.5, dmg: 22 },
 
-        { type: 'ConstructionYard', house: 'Harkonnen', x: W - 4, y: H - 4, hp: 600, maxHp: 600, pProd: 50, pCons: 0 },
-        { type: 'WindTrap', house: 'Harkonnen', x: W - 6, y: H - 4, hp: 400, maxHp: 400, pProd: 120, pCons: 0 },
-        { type: 'Refinery', house: 'Harkonnen', x: W - 4, y: H - 6, hp: 450, maxHp: 450, pProd: 0, pCons: 35 },
-        { type: 'Outpost', house: 'Harkonnen', x: W - 6, y: H - 6, hp: 400, maxHp: 400, pProd: 0, pCons: 40 },
-        { type: 'GunTurret', house: 'Harkonnen', x: W - 8, y: H - 7, hp: 350, maxHp: 350, pProd: 0, pCons: 20, range: 4.5, dmg: 22 }
+        // === HARKONNEN FORTIFIED STRONGHOLD BASE ===
+        { type: 'ConstructionYard', house: 'Harkonnen', x: W - 3, y: H - 3, hp: 600, maxHp: 600, pProd: 50, pCons: 0 },
+        { type: 'WindTrap', house: 'Harkonnen', x: W - 5, y: H - 3, hp: 400, maxHp: 400, pProd: 120, pCons: 0 },
+        { type: 'WindTrap', house: 'Harkonnen', x: W - 7, y: H - 3, hp: 400, maxHp: 400, pProd: 120, pCons: 0 },
+        { type: 'Refinery', house: 'Harkonnen', x: W - 3, y: H - 5, hp: 450, maxHp: 450, pProd: 0, pCons: 35 },
+        { type: 'Outpost', house: 'Harkonnen', x: W - 5, y: H - 5, hp: 400, maxHp: 400, pProd: 0, pCons: 40 },
+        { type: 'Silo', house: 'Harkonnen', x: W - 7, y: H - 5, hp: 300, maxHp: 300, pProd: 0, pCons: 10 },
+        { type: 'Barracks', house: 'Harkonnen', x: W - 3, y: H - 7, hp: 350, maxHp: 350, pProd: 0, pCons: 20 },
+        { type: 'HeavyFactory', house: 'Harkonnen', x: W - 5, y: H - 7, hp: 550, maxHp: 550, pProd: 0, pCons: 50 },
+        { type: 'HighTech', house: 'Harkonnen', x: W - 7, y: H - 7, hp: 450, maxHp: 450, pProd: 0, pCons: 45 },
+        { type: 'RepairFacility', house: 'Harkonnen', x: W - 3, y: H - 9, hp: 400, maxHp: 400, pProd: 0, pCons: 30 },
+        { type: 'Starport', house: 'Harkonnen', x: W - 5, y: H - 9, hp: 500, maxHp: 500, pProd: 0, pCons: 40 },
+        { type: 'Palace', house: 'Harkonnen', x: W - 7, y: H - 9, hp: 800, maxHp: 800, pProd: 0, pCons: 60 },
+        { type: 'GunTurret', house: 'Harkonnen', x: W - 9, y: H - 3, hp: 350, maxHp: 350, pProd: 0, pCons: 20, range: 4.5, dmg: 22 },
+        { type: 'RocketTurret', house: 'Harkonnen', x: W - 9, y: H - 6, hp: 350, maxHp: 350, pProd: 0, pCons: 45, range: 6.5, dmg: 45 },
+        { type: 'GunTurret', house: 'Harkonnen', x: W - 9, y: H - 9, hp: 350, maxHp: 350, pProd: 0, pCons: 20, range: 4.5, dmg: 22 }
       ];
 
+      // Robust Starting Armies with Diverse Ground & Aviation Forces
       units = [
-        { type: 'Harvester', house: 'Atreides', x: 5.5, y: 4.5, tx: 8.5, ty: 14.5, hp: 120, maxHp: 120, spice: 0, maxSpice: 700, dmg: 5, range: 1.5, angle: 0, turretAngle: 0, speed: 1.1, turnSpeed: 3.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
-        { type: 'CombatTank', house: 'Atreides', x: 6.5, y: 3.5, tx: 10.5, ty: 8.5, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 25, range: 4.0, angle: 0, turretAngle: 0, speed: 1.6, turnSpeed: 3.2, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
-        { type: 'Trike', house: 'Atreides', x: 5.5, y: 6.5, tx: 12.5, ty: 12.5, hp: 90, maxHp: 90, spice: 0, maxSpice: 0, dmg: 15, range: 2.8, angle: 0, turretAngle: 0, speed: 2.6, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
-        // Starting Atreides Scout Ornithopter
-        { type: 'Ornithopter', house: 'Atreides', x: 4.0, y: 5.0, tx: 8.0, ty: 6.0, hp: 120, maxHp: 120, spice: 0, maxSpice: 0, dmg: 25, range: 4.5, angle: 0, turretAngle: 0, speed: 4.2, turnSpeed: 4.5, repairing: false, airlifted: false, isAir: true, orbitAngle: 0, wingPhase: 0, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        // --- Atreides Armored Battlegroup ---
+        { type: 'Harvester', house: 'Atreides', x: 7.5, y: 3.5, tx: 14.5, ty: 12.5, hp: 120, maxHp: 120, spice: 0, maxSpice: 700, dmg: 5, range: 1.5, angle: 0, turretAngle: 0, speed: 1.1, turnSpeed: 3.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Harvester', house: 'Atreides', x: 7.5, y: 6.5, tx: 16.5, ty: 14.5, hp: 120, maxHp: 120, spice: 0, maxSpice: 700, dmg: 5, range: 1.5, angle: 0, turretAngle: 0, speed: 1.1, turnSpeed: 3.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'CombatTank', house: 'Atreides', x: 9.5, y: 3.5, tx: 18.5, ty: 6.5, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 25, range: 4.0, angle: 0, turretAngle: 0, speed: 1.6, turnSpeed: 3.2, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'CombatTank', house: 'Atreides', x: 9.5, y: 5.5, tx: 18.5, ty: 10.5, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 25, range: 4.0, angle: 0, turretAngle: 0, speed: 1.6, turnSpeed: 3.2, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'CombatTank', house: 'Atreides', x: 9.5, y: 7.5, tx: 18.5, ty: 14.5, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 25, range: 4.0, angle: 0, turretAngle: 0, speed: 1.6, turnSpeed: 3.2, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'SiegeTank', house: 'Atreides', x: 10.5, y: 4.5, tx: 16.5, ty: 8.5, hp: 180, maxHp: 180, spice: 0, maxSpice: 0, dmg: 40, range: 6.0, angle: 0, turretAngle: 0, speed: 1.2, turnSpeed: 2.6, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'SiegeTank', house: 'Atreides', x: 10.5, y: 6.5, tx: 16.5, ty: 12.5, hp: 180, maxHp: 180, spice: 0, maxSpice: 0, dmg: 40, range: 6.0, angle: 0, turretAngle: 0, speed: 1.2, turnSpeed: 2.6, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'MissileTank', house: 'Atreides', x: 10.5, y: 2.5, tx: 15.5, ty: 5.5, hp: 110, maxHp: 110, spice: 0, maxSpice: 0, dmg: 35, range: 5.5, angle: 0, turretAngle: 0, speed: 1.5, turnSpeed: 3.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'MissileTank', house: 'Atreides', x: 10.5, y: 8.5, tx: 15.5, ty: 15.5, hp: 110, maxHp: 110, spice: 0, maxSpice: 0, dmg: 35, range: 5.5, angle: 0, turretAngle: 0, speed: 1.5, turnSpeed: 3.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Trike', house: 'Atreides', x: 11.5, y: 3.5, tx: 20.5, ty: 6.5, hp: 90, maxHp: 90, spice: 0, maxSpice: 0, dmg: 15, range: 2.8, angle: 0, turretAngle: 0, speed: 2.6, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Trike', house: 'Atreides', x: 11.5, y: 5.5, tx: 20.5, ty: 10.5, hp: 90, maxHp: 90, spice: 0, maxSpice: 0, dmg: 15, range: 2.8, angle: 0, turretAngle: 0, speed: 2.6, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Trike', house: 'Atreides', x: 11.5, y: 7.5, tx: 20.5, ty: 14.5, hp: 90, maxHp: 90, spice: 0, maxSpice: 0, dmg: 15, range: 2.8, angle: 0, turretAngle: 0, speed: 2.6, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Quad', house: 'Atreides', x: 12.5, y: 4.5, tx: 22.5, ty: 8.5, hp: 110, maxHp: 110, spice: 0, maxSpice: 0, dmg: 20, range: 3.2, angle: 0, turretAngle: 0, speed: 2.2, turnSpeed: 3.6, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Quad', house: 'Atreides', x: 12.5, y: 6.5, tx: 22.5, ty: 12.5, hp: 110, maxHp: 110, spice: 0, maxSpice: 0, dmg: 20, range: 3.2, angle: 0, turretAngle: 0, speed: 2.2, turnSpeed: 3.6, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'LightInfantry', house: 'Atreides', x: 8.5, y: 3.0, tx: 12.5, ty: 3.0, hp: 60, maxHp: 60, spice: 0, maxSpice: 0, dmg: 10, range: 2.2, angle: 0, turretAngle: 0, speed: 1.2, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'LightInfantry', house: 'Atreides', x: 8.5, y: 4.5, tx: 12.5, ty: 5.0, hp: 60, maxHp: 60, spice: 0, maxSpice: 0, dmg: 10, range: 2.2, angle: 0, turretAngle: 0, speed: 1.2, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'LightInfantry', house: 'Atreides', x: 8.5, y: 6.5, tx: 12.5, ty: 7.0, hp: 60, maxHp: 60, spice: 0, maxSpice: 0, dmg: 10, range: 2.2, angle: 0, turretAngle: 0, speed: 1.2, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'LightInfantry', house: 'Atreides', x: 8.5, y: 8.0, tx: 12.5, ty: 9.0, hp: 60, maxHp: 60, spice: 0, maxSpice: 0, dmg: 10, range: 2.2, angle: 0, turretAngle: 0, speed: 1.2, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        // --- Atreides Aerial Fleet ---
+        { type: 'Ornithopter', house: 'Atreides', x: 6.0, y: 5.0, tx: 14.0, ty: 8.0, hp: 120, maxHp: 120, spice: 0, maxSpice: 0, dmg: 25, range: 4.5, angle: 0, turretAngle: 0, speed: 4.2, turnSpeed: 4.5, repairing: false, airlifted: false, isAir: true, orbitAngle: 0, wingPhase: 0, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Ornithopter', house: 'Atreides', x: 7.0, y: 7.0, tx: 14.0, ty: 12.0, hp: 120, maxHp: 120, spice: 0, maxSpice: 0, dmg: 25, range: 4.5, angle: 0, turretAngle: 0, speed: 4.2, turnSpeed: 4.5, repairing: false, airlifted: false, isAir: true, orbitAngle: 1.5, wingPhase: 0, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Gunship', house: 'Atreides', x: 8.0, y: 6.0, tx: 16.0, ty: 10.0, hp: 160, maxHp: 160, spice: 0, maxSpice: 0, dmg: 35, range: 4.5, angle: 0, turretAngle: 0, speed: 3.5, turnSpeed: 3.8, repairing: false, airlifted: false, isAir: true, orbitAngle: 3.0, wingPhase: 0, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Bomber', house: 'Atreides', x: 5.0, y: 4.0, tx: 18.0, ty: 10.0, hp: 200, maxHp: 200, spice: 0, maxSpice: 0, dmg: 60, range: 4.0, angle: 0, turretAngle: 0, speed: 3.8, turnSpeed: 3.2, repairing: false, airlifted: false, isAir: true, orbitAngle: 4.5, wingPhase: 0, wormPanic: false, retreatWarning: false, lastAttacker: null },
 
-        { type: 'Harvester', house: 'Harkonnen', x: W - 6.5, y: H - 5.5, tx: W - 10.5, ty: 11.5, hp: 120, maxHp: 120, spice: 0, maxSpice: 700, dmg: 5, range: 1.5, angle: Math.PI, turretAngle: Math.PI, speed: 1.1, turnSpeed: 3.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
-        { type: 'CombatTank', house: 'Harkonnen', x: W - 7.5, y: H - 4.5, tx: W - 12.5, ty: 9.5, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 25, range: 4.0, angle: Math.PI, turretAngle: Math.PI, speed: 1.6, turnSpeed: 3.2, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
-        { type: 'Trike', house: 'Harkonnen', x: W - 6.5, y: H - 7.5, tx: W - 14.5, ty: 13.5, hp: 90, maxHp: 90, spice: 0, maxSpice: 0, dmg: 15, range: 2.8, angle: Math.PI, turretAngle: Math.PI, speed: 2.6, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null }
+        // --- Harkonnen Armored Battlegroup ---
+        { type: 'Harvester', house: 'Harkonnen', x: W - 8.5, y: H - 4.5, tx: W - 14.5, ty: 13.5, hp: 120, maxHp: 120, spice: 0, maxSpice: 700, dmg: 5, range: 1.5, angle: Math.PI, turretAngle: Math.PI, speed: 1.1, turnSpeed: 3.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Harvester', house: 'Harkonnen', x: W - 8.5, y: H - 6.5, tx: W - 16.5, ty: 15.5, hp: 120, maxHp: 120, spice: 0, maxSpice: 700, dmg: 5, range: 1.5, angle: Math.PI, turretAngle: Math.PI, speed: 1.1, turnSpeed: 3.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'CombatTank', house: 'Harkonnen', x: W - 10.5, y: H - 3.5, tx: W - 18.5, ty: 7.5, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 25, range: 4.0, angle: Math.PI, turretAngle: Math.PI, speed: 1.6, turnSpeed: 3.2, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'CombatTank', house: 'Harkonnen', x: W - 10.5, y: H - 5.5, tx: W - 18.5, ty: 11.5, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 25, range: 4.0, angle: Math.PI, turretAngle: Math.PI, speed: 1.6, turnSpeed: 3.2, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'CombatTank', house: 'Harkonnen', x: W - 10.5, y: H - 7.5, tx: W - 18.5, ty: 15.5, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 25, range: 4.0, angle: Math.PI, turretAngle: Math.PI, speed: 1.6, turnSpeed: 3.2, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'SiegeTank', house: 'Harkonnen', x: W - 11.5, y: H - 4.5, tx: W - 17.5, ty: 9.5, hp: 180, maxHp: 180, spice: 0, maxSpice: 0, dmg: 40, range: 6.0, angle: Math.PI, turretAngle: Math.PI, speed: 1.2, turnSpeed: 2.6, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'SiegeTank', house: 'Harkonnen', x: W - 11.5, y: H - 6.5, tx: W - 17.5, ty: 13.5, hp: 180, maxHp: 180, spice: 0, maxSpice: 0, dmg: 40, range: 6.0, angle: Math.PI, turretAngle: Math.PI, speed: 1.2, turnSpeed: 2.6, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'MissileTank', house: 'Harkonnen', x: W - 11.5, y: H - 2.5, tx: W - 16.5, ty: 6.5, hp: 110, maxHp: 110, spice: 0, maxSpice: 0, dmg: 35, range: 5.5, angle: Math.PI, turretAngle: Math.PI, speed: 1.5, turnSpeed: 3.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'MissileTank', house: 'Harkonnen', x: W - 11.5, y: H - 8.5, tx: W - 16.5, ty: 16.5, hp: 110, maxHp: 110, spice: 0, maxSpice: 0, dmg: 35, range: 5.5, angle: Math.PI, turretAngle: Math.PI, speed: 1.5, turnSpeed: 3.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Trike', house: 'Harkonnen', x: W - 12.5, y: H - 3.5, tx: W - 20.5, ty: 7.5, hp: 90, maxHp: 90, spice: 0, maxSpice: 0, dmg: 15, range: 2.8, angle: Math.PI, turretAngle: Math.PI, speed: 2.6, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Trike', house: 'Harkonnen', x: W - 12.5, y: H - 5.5, tx: W - 20.5, ty: 11.5, hp: 90, maxHp: 90, spice: 0, maxSpice: 0, dmg: 15, range: 2.8, angle: Math.PI, turretAngle: Math.PI, speed: 2.6, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Trike', house: 'Harkonnen', x: W - 12.5, y: H - 7.5, tx: W - 20.5, ty: 15.5, hp: 90, maxHp: 90, spice: 0, maxSpice: 0, dmg: 15, range: 2.8, angle: Math.PI, turretAngle: Math.PI, speed: 2.6, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Quad', house: 'Harkonnen', x: W - 13.5, y: H - 4.5, tx: W - 22.5, ty: 9.5, hp: 110, maxHp: 110, spice: 0, maxSpice: 0, dmg: 20, range: 3.2, angle: Math.PI, turretAngle: Math.PI, speed: 2.2, turnSpeed: 3.6, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Quad', house: 'Harkonnen', x: W - 13.5, y: H - 6.5, tx: W - 22.5, ty: 13.5, hp: 110, maxHp: 110, spice: 0, maxSpice: 0, dmg: 20, range: 3.2, angle: Math.PI, turretAngle: Math.PI, speed: 2.2, turnSpeed: 3.6, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'LightInfantry', house: 'Harkonnen', x: W - 9.5, y: H - 3.0, tx: W - 13.5, ty: H - 3.0, hp: 60, maxHp: 60, spice: 0, maxSpice: 0, dmg: 10, range: 2.2, angle: Math.PI, turretAngle: Math.PI, speed: 1.2, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'LightInfantry', house: 'Harkonnen', x: W - 9.5, y: H - 4.5, tx: W - 13.5, ty: H - 5.0, hp: 60, maxHp: 60, spice: 0, maxSpice: 0, dmg: 10, range: 2.2, angle: Math.PI, turretAngle: Math.PI, speed: 1.2, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'LightInfantry', house: 'Harkonnen', x: W - 9.5, y: H - 6.5, tx: W - 13.5, ty: H - 7.0, hp: 60, maxHp: 60, spice: 0, maxSpice: 0, dmg: 10, range: 2.2, angle: Math.PI, turretAngle: Math.PI, speed: 1.2, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'LightInfantry', house: 'Harkonnen', x: W - 9.5, y: H - 8.0, tx: W - 13.5, ty: H - 9.0, hp: 60, maxHp: 60, spice: 0, maxSpice: 0, dmg: 10, range: 2.2, angle: Math.PI, turretAngle: Math.PI, speed: 1.2, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        // --- Harkonnen Aerial Fleet ---
+        { type: 'Gunship', house: 'Harkonnen', x: W - 8.0, y: H - 6.0, tx: W - 16.0, ty: 12.0, hp: 160, maxHp: 160, spice: 0, maxSpice: 0, dmg: 35, range: 4.5, angle: Math.PI, turretAngle: Math.PI, speed: 3.5, turnSpeed: 3.8, repairing: false, airlifted: false, isAir: true, orbitAngle: 1.0, wingPhase: 0, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Bomber', house: 'Harkonnen', x: W - 6.0, y: H - 4.0, tx: W - 18.0, ty: 12.0, hp: 200, maxHp: 200, spice: 0, maxSpice: 0, dmg: 60, range: 4.0, angle: Math.PI, turretAngle: Math.PI, speed: 3.8, turnSpeed: 3.2, repairing: false, airlifted: false, isAir: true, orbitAngle: 2.5, wingPhase: 0, wormPanic: false, retreatWarning: false, lastAttacker: null }
       ];
 
       carryalls = [
-        { house: 'Atreides', x: 2.5, y: 2.5, tx: 2.5, ty: 2.5, angle: 0, speed: 5.0, state: 'idle', targetUnit: null, carryingUnit: null, wingPhase: 0 }
+        { house: 'Atreides', x: 3.5, y: 3.5, tx: 3.5, ty: 3.5, angle: 0, speed: 5.0, state: 'idle', targetUnit: null, carryingUnit: null, wingPhase: 0 },
+        { house: 'Atreides', x: 5.5, y: 3.5, tx: 5.5, ty: 3.5, angle: 0, speed: 5.0, state: 'idle', targetUnit: null, carryingUnit: null, wingPhase: 1.2 },
+        { house: 'Harkonnen', x: W - 4.5, y: H - 4.5, tx: W - 4.5, ty: H - 4.5, angle: Math.PI, speed: 5.0, state: 'idle', targetUnit: null, carryingUnit: null, wingPhase: 0 }
       ];
 
       sandworms = [
         {
-          x: 24, y: 12, tx: 24, ty: 12, angle: 0, hp: 600, maxHp: 600,
-          stamina: 100, submerged: false, dormant: false,
+          x: 24, y: 13.5, tx: 24, ty: 13.5, angle: 0, hp: 600, maxHp: 600,
+          stamina: 100, submerged: false, dormant: false, patrolTimer: 0,
           baseSpeed: 1.7, speed: 1.7, wavePhase: 0, lastBurrowHp: 600,
           submergeTimer: 0, dormantTimer: 0,
           segments: [
-            { x: 23.5, y: 12, waveOffset: 0 },
-            { x: 23.0, y: 12, waveOffset: 0 },
-            { x: 22.5, y: 12, waveOffset: 0 },
-            { x: 22.0, y: 12, waveOffset: 0 },
-            { x: 21.5, y: 12, waveOffset: 0 },
-            { x: 21.0, y: 12, waveOffset: 0 }
+            { x: 23.5, y: 13.5, waveOffset: 0 },
+            { x: 23.0, y: 13.5, waveOffset: 0 },
+            { x: 22.5, y: 13.5, waveOffset: 0 },
+            { x: 22.0, y: 13.5, waveOffset: 0 },
+            { x: 21.5, y: 13.5, waveOffset: 0 },
+            { x: 21.0, y: 13.5, waveOffset: 0 }
           ],
           trail: []
         }
@@ -837,27 +923,107 @@
 
       if (difficulty === 'hard') {
         sandworms.push({
-          x: 25, y: 8, tx: 25, ty: 8, angle: Math.PI, hp: 600, maxHp: 600,
-          stamina: 100, submerged: false, dormant: false,
+          x: 25, y: 9.0, tx: 25, ty: 9.0, angle: Math.PI, hp: 600, maxHp: 600,
+          stamina: 100, submerged: false, dormant: false, patrolTimer: 0,
           baseSpeed: 1.9, speed: 1.9, wavePhase: 1.5, lastBurrowHp: 600,
           submergeTimer: 0, dormantTimer: 0,
           segments: [
-            { x: 25.5, y: 8, waveOffset: 0 },
-            { x: 26.0, y: 8, waveOffset: 0 },
-            { x: 26.5, y: 8, waveOffset: 0 },
-            { x: 27.0, y: 8, waveOffset: 0 }
+            { x: 25.5, y: 9.0, waveOffset: 0 },
+            { x: 26.0, y: 9.0, waveOffset: 0 },
+            { x: 26.5, y: 9.0, waveOffset: 0 },
+            { x: 27.0, y: 9.0, waveOffset: 0 }
           ],
           trail: []
         });
       }
 
-      logMsg(`Mission initialized on ${difficulty.toUpperCase()} difficulty. 48x24 Sector active.`, 'sys');
+      logMsg(`Mission initialized on ${difficulty.toUpperCase()} difficulty. 48x27 Widescreen Battlefield active.`, 'sys');
       updateUI();
     }
 
     function setDifficulty(diff) {
       difficulty = diff;
       logMsg(`Difficulty set to ${diff.toUpperCase()}. Press Restart Mission to apply changes.`, 'sys');
+    }
+
+    /* =========================================================================
+       SELECTION MANAGEMENT & BUILDING INSPECTION
+       ========================================================================= */
+    function toggleSelection() {
+      selectionEnabled = !selectionEnabled;
+      const btn = document.getElementById('btn-toggle-select');
+      if (btn) btn.textContent = 'Select: ' + (selectionEnabled ? 'ON' : 'OFF');
+      if (!selectionEnabled) {
+        clearSelection();
+      }
+      logMsg(`Selection mode is now ${selectionEnabled ? 'ENABLED' : 'DISABLED'}.`, 'sys');
+    }
+
+    function clearSelection() {
+      selectedUnits = [];
+      selectedUnit = null;
+      selectedBuilding = null;
+      updateSelectionInspector();
+      updateUI();
+    }
+
+    function updateSelectionInspector() {
+      const panel = document.getElementById('selection-inspector');
+      if (!panel) return;
+
+      if (selectedBuilding) {
+        panel.style.display = 'flex';
+        document.getElementById('inspect-title').textContent = `Structure: ${selectedBuilding.house} ${selectedBuilding.type} at (${selectedBuilding.x}, ${selectedBuilding.y})`;
+        document.getElementById('inspect-hp').textContent = `HP: ${Math.round(selectedBuilding.hp)} / ${selectedBuilding.maxHp}`;
+        const pInfo = selectedBuilding.pProd > 0 ? `+${selectedBuilding.pProd} kW Power` : `-${selectedBuilding.pCons} kW Power`;
+        document.getElementById('inspect-info').textContent = pInfo;
+        document.getElementById('inspect-btn-repair').style.display = selectedBuilding.house === 'Atreides' ? 'inline-block' : 'none';
+        document.getElementById('inspect-btn-sell').style.display = selectedBuilding.house === 'Atreides' ? 'inline-block' : 'none';
+      } else if (selectedUnits.length > 0) {
+        panel.style.display = 'flex';
+        if (selectedUnits.length === 1) {
+          const u = selectedUnits[0];
+          document.getElementById('inspect-title').textContent = `Unit: ${u.house} ${u.type} (${u.isAir ? 'Air' : 'Ground'})`;
+          document.getElementById('inspect-hp').textContent = `HP: ${Math.round(u.hp)} / ${u.maxHp}`;
+          const spiceInfo = u.type === 'Harvester' ? `Spice: ${u.spice || 0} / ${u.maxSpice}` : `Range: ${u.range} | Dmg: ${u.dmg}`;
+          document.getElementById('inspect-info').textContent = spiceInfo;
+        } else {
+          document.getElementById('inspect-title').textContent = `Squad: ${selectedUnits.length} Atreides Units Selected`;
+          document.getElementById('inspect-hp').textContent = `HP: Ready`;
+          document.getElementById('inspect-info').textContent = `Formations Active`;
+        }
+        document.getElementById('inspect-btn-repair').style.display = 'none';
+        document.getElementById('inspect-btn-sell').style.display = 'none';
+      } else {
+        panel.style.display = 'none';
+      }
+    }
+
+    function inspectAction(action) {
+      if (!selectedBuilding || selectedBuilding.house !== 'Atreides') return;
+      if (action === 'repair') {
+        if (credits.Atreides >= 50 && selectedBuilding.hp < selectedBuilding.maxHp) {
+          credits.Atreides -= 50;
+          selectedBuilding.hp = Math.min(selectedBuilding.maxHp, selectedBuilding.hp + 100);
+          playSound('repair');
+          addRepairSparks(selectedBuilding.x * TILE + 14, selectedBuilding.y * TILE + 14);
+          logMsg(`Repaired ${selectedBuilding.type} for 50 credits (+100 HP).`, 'repair');
+        } else if (selectedBuilding.hp >= selectedBuilding.maxHp) {
+          logMsg(`${selectedBuilding.type} is already at full structural integrity.`, 'sys');
+        } else {
+          playSound('error');
+          logMsg(`Insufficient credits to repair ${selectedBuilding.type}.`, 'economy');
+        }
+      } else if (action === 'sell') {
+        const spec = BUILDING_SPECS[selectedBuilding.type] || { cost: 250 };
+        const refund = Math.max(1, Math.floor((spec.cost * selectedBuilding.hp) / (2 * selectedBuilding.maxHp)));
+        credits.Atreides = Math.min(maxCapacity('Atreides'), credits.Atreides + refund);
+        buildings = buildings.filter(b => b !== selectedBuilding);
+        playSound('build');
+        logMsg(`Sold ${selectedBuilding.type} for +${refund} credits.`, 'economy');
+        clearSelection();
+      }
+      updateUI();
     }
 
     function restartMission() {
@@ -1240,27 +1406,33 @@
     canvas.addEventListener('mouseup', (e) => {
       if (!isDragging) return;
       isDragging = false;
+      const rect = canvas.getBoundingClientRect();
+      dragCurrent.x = e.clientX - rect.left;
+      dragCurrent.y = e.clientY - rect.top;
 
-      const minX = Math.min(dragStart.x, dragCurrent.x);
-      const maxX = Math.max(dragStart.x, dragCurrent.x);
-      const minY = Math.min(dragStart.y, dragCurrent.y);
-      const maxY = Math.max(dragStart.y, dragCurrent.y);
+      const dx = Math.abs(dragCurrent.x - dragStart.x);
+      const dy = Math.abs(dragCurrent.y - dragStart.y);
 
-      const dragDistance = Math.hypot(maxX - minX, maxY - minY);
+      // Squad Marquee Box Selection
+      if (mode === 'select' && (dx > 8 || dy > 8)) {
+        if (!selectionEnabled) return;
+        const minX = Math.min(dragStart.x, dragCurrent.x) / TILE;
+        const maxX = Math.max(dragStart.x, dragCurrent.x) / TILE;
+        const minY = Math.min(dragStart.y, dragCurrent.y) / TILE;
+        const maxY = Math.max(dragStart.y, dragCurrent.y) / TILE;
 
-      // Box Marquee Drag Selection
-      if (dragDistance > 14 && mode === 'select') {
-        const boxed = units.filter(u => {
-          if (u.house !== 'Atreides' || u.hp <= 0 || u.airlifted) return false;
-          const px = u.x * TILE, py = u.y * TILE;
-          return px >= minX && px <= maxX && py >= minY && py <= maxY;
-        });
+        const boxed = units.filter(u => u.house === 'Atreides' && u.hp > 0 && !u.airlifted &&
+          u.x >= minX && u.x <= maxX && u.y >= minY && u.y <= maxY
+        );
 
         if (boxed.length > 0) {
           selectedUnits = boxed;
           selectedUnit = boxed[0];
+          selectedBuilding = null;
           playSound('click');
           logMsg(`Selected squad of ${boxed.length} Atreides units.`, 'sys');
+          updateSelectionInspector();
+          updateUI();
           return;
         }
       }
@@ -1272,23 +1444,85 @@
       const gy = Math.max(0, Math.min(H - 1, Math.floor(wy)));
 
       if (mode === 'select') {
-        const clicked = units.find(u => u.house === 'Atreides' && Math.hypot(u.x - wx, u.y - wy) < 0.95);
-        if (clicked) {
-          selectedUnits = [clicked];
-          selectedUnit = clicked;
+        if (!selectionEnabled) {
+          // If selection is disabled, clicking moves existing selected units
+          if (selectedUnits.length > 0) {
+            playSound('click');
+            selectedUnits.forEach((u, idx) => {
+              const row = Math.floor(idx / 4);
+              const col = idx % 4;
+              u.tx = Math.max(0.5, Math.min(W - 0.5, wx + (col - 1.5) * 0.85));
+              u.ty = Math.max(0.5, Math.min(H - 0.5, wy + (row - 1) * 0.85));
+              u.repairing = false;
+            });
+            logMsg(`Tactical movement ordered to (${wx.toFixed(1)}, ${wy.toFixed(1)}).`, 'sys');
+          }
+          updateUI();
+          return;
+        }
+
+        // 1. Try selecting a unit under cursor
+        const clickedUnit = units.find(u => Math.hypot(u.x - wx, u.y - wy) < 0.95 && u.hp > 0);
+        if (clickedUnit) {
+          if (clickedUnit.house === 'Atreides') {
+            selectedUnits = [clickedUnit];
+            selectedUnit = clickedUnit;
+            selectedBuilding = null;
+            playSound('click');
+            logMsg(`Selected Atreides ${clickedUnit.type}${clickedUnit.isAir ? ' (Holding pattern)' : ''} at (${clickedUnit.x.toFixed(1)}, ${clickedUnit.y.toFixed(1)}).`, 'sys');
+          } else {
+            // Clicked enemy unit
+            if (selectedUnits.length > 0) {
+              selectedUnits.forEach(u => {
+                u.tx = clickedUnit.x;
+                u.ty = clickedUnit.y;
+              });
+              playSound('click');
+              logMsg(`Squad ordered to engage enemy ${clickedUnit.house} ${clickedUnit.type}!`, 'combat');
+            } else {
+              selectedUnits = [clickedUnit];
+              selectedUnit = clickedUnit;
+              selectedBuilding = null;
+              playSound('click');
+              logMsg(`Target acquired: enemy ${clickedUnit.house} ${clickedUnit.type} [${Math.round(clickedUnit.hp)}/${clickedUnit.maxHp} HP].`, 'sys');
+            }
+          }
+          updateSelectionInspector();
+          updateUI();
+          return;
+        }
+
+        // 2. Try selecting a building under cursor
+        const clickedB = buildings.find(b => b.hp > 0 && b.x === gx && b.y === gy);
+        if (clickedB) {
+          selectedBuilding = clickedB;
+          selectedUnits = [];
+          selectedUnit = null;
           playSound('click');
-          logMsg(`Selected Atreides ${clicked.type}${clicked.isAir ? ' (Orbiting holding pattern)' : ''} at (${clicked.x.toFixed(1)}, ${clicked.y.toFixed(1)}).`, 'sys');
-        } else if (selectedUnits.length > 0) {
+          logMsg(`Selected ${clickedB.house} ${clickedB.type} at (${gx}, ${gy}) [${clickedB.hp}/${clickedB.maxHp} HP].`, 'sys');
+          updateSelectionInspector();
+          updateUI();
+          return;
+        }
+
+        // 3. Clicked empty space
+        if (selectedUnits.length > 0) {
           playSound('click');
           selectedUnits.forEach((u, idx) => {
-            const row = Math.floor(idx / 3);
-            const col = idx % 3;
-            u.tx = Math.max(0.5, Math.min(W - 0.5, wx + (col - 1) * 0.8));
-            u.ty = Math.max(0.5, Math.min(H - 0.5, wy + (row - 1) * 0.8));
+            const row = Math.floor(idx / 4);
+            const col = idx % 4;
+            u.tx = Math.max(0.5, Math.min(W - 0.5, wx + (col - 1.5) * 0.85));
+            u.ty = Math.max(0.5, Math.min(H - 0.5, wy + (row - 1) * 0.85));
             u.repairing = false;
           });
           logMsg(`Tactical movement ordered to (${wx.toFixed(1)}, ${wy.toFixed(1)}).`, 'sys');
+        } else if (selectedBuilding) {
+          selectedBuilding = null;
+          playSound('click');
+          logMsg(`Deselected structure.`, 'sys');
         }
+        updateSelectionInspector();
+
       } else if (mode === 'sell') {
         const b = buildings.find(b => b.x === gx && b.y === gy && b.house === 'Atreides');
         if (b) {
@@ -1375,6 +1609,18 @@
         }
       }
       updateUI();
+    });
+
+    canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      clearSelection();
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        clearSelection();
+        setMode('select');
+      }
     });
 
     radarCanvas.addEventListener('mousedown', (e) => {
@@ -1480,7 +1726,7 @@
       units.forEach(u => {
         if (u.airlifted || u.hp <= 0) return;
 
-        // Ground Unit Self-Repair Decision (retreat to Repair Facility when badly damaged)
+        // Ground Unit Self-Repair Decision
         if (!u.isAir && u.hp < u.maxHp * 0.45 && !u.repairing && !u.wormPanic) {
           const rf = buildings.find(b => b.house === u.house && b.type === 'RepairFacility' && b.hp > 0);
           if (rf) {
@@ -1505,15 +1751,15 @@
           }
         }
 
-        // Worm threat detection & avoidance (Air units immune)
+        // Worm threat detection & avoidance
         if (!u.isAir) {
           sandworms.forEach(w => {
-            if (!w.submerged && !w.dormant && Math.hypot(u.x - w.x, u.y - w.y) < 4.5) {
+            if (!w.submerged && !w.dormant && Math.hypot(u.x - w.x, u.y - w.y) < 5.0) {
               const tile = tiles[Math.floor(u.y)][Math.floor(u.x)];
               if (tile !== 'ROCK' && tile !== 'CONCRETE') {
                 u.wormPanic = true;
-                u.tx = u.house === 'Atreides' ? 3.5 : W - 4.5;
-                u.ty = u.house === 'Atreides' ? 3.5 : H - 4.5;
+                u.tx = u.house === 'Atreides' ? 4.5 : W - 5.5;
+                u.ty = u.house === 'Atreides' ? 4.5 : H - 5.5;
               }
             }
           });
@@ -1527,7 +1773,6 @@
 
           const distToDest = Math.hypot(u.tx - u.x, u.ty - u.y);
 
-          // Fly in circles when selected or loitering near destination
           if (isManuallySelected || distToDest < 1.4) {
             const orbitRad = u.type === 'Bomber' ? 2.0 : 1.35;
             const targetOrbitX = u.tx + Math.cos(u.orbitAngle) * orbitRad;
@@ -1538,7 +1783,6 @@
             u.x = Math.max(0.4, Math.min(W - 0.4, u.x + Math.cos(u.angle) * moveStep));
             u.y = Math.max(0.4, Math.min(H - 0.4, u.y + Math.sin(u.angle) * moveStep));
           } else {
-            // Direct flight to ordered destination
             const flightAngle = Math.atan2(u.ty - u.y, u.tx - u.x);
             u.angle = smoothTurn(u.angle, flightAngle, u.turnSpeed * dt);
             const moveStep = Math.min(distToDest, u.speed * dt);
@@ -1546,7 +1790,7 @@
             u.y = Math.max(0.4, Math.min(H - 0.4, u.y + Math.sin(u.angle) * moveStep));
           }
         } else {
-          // Ground Unit Smooth Arbitrary-Angle Rotation & Movement
+          // Ground Unit Movement
           const dist = Math.hypot(u.tx - u.x, u.ty - u.y);
           if (dist > 0.08) {
             const desiredAngle = Math.atan2(u.ty - u.y, u.tx - u.x);
@@ -1564,8 +1808,9 @@
           }
         }
 
-        // Combat Retaliation
+        // Combat: Attack Enemy Units, Nearby Sandworms, or Enemy Buildings
         if (u.dmg > 0) {
+          // Priority 1: Enemy unit in weapon range
           const enemy = units.find(e => e.house !== u.house && e.hp > 0 && Math.hypot(e.x - u.x, e.y - u.y) <= u.range);
           if (enemy && Math.random() < dt * 1.5) {
             enemy.hp = Math.max(0, enemy.hp - u.dmg);
@@ -1586,17 +1831,70 @@
               addTracer(u.x * TILE, u.y * TILE, enemy.x * TILE, enemy.y * TILE);
               addExplosion(enemy.x * TILE, enemy.y * TILE, 12);
             }
+          } else if (!enemy) {
+            // Priority 2: Nearby Sandworm threatening units
+            const nearbyWorm = sandworms.find(w => !w.submerged && !w.dormant && w.hp > 0 && Math.hypot(w.x - u.x, w.y - u.y) <= u.range);
+            if (nearbyWorm && Math.random() < dt * 1.5) {
+              nearbyWorm.hp = Math.max(0, nearbyWorm.hp - u.dmg);
+              u.turretAngle = Math.atan2(nearbyWorm.y - u.y, nearbyWorm.x - u.x);
+              playSound('cannon');
+              addTracer(u.x * TILE, u.y * TILE, nearbyWorm.x * TILE, nearbyWorm.y * TILE, '#f59e0b');
+              addExplosion(nearbyWorm.x * TILE, nearbyWorm.y * TILE, 14);
+
+              // Worm dives if badly injured (loses 1/3 HP threshold)
+              if (nearbyWorm.hp <= nearbyWorm.lastBurrowHp - 200 && !nearbyWorm.submerged) {
+                nearbyWorm.submerged = true;
+                nearbyWorm.submergeTimer = 12;
+                nearbyWorm.lastBurrowHp = nearbyWorm.hp;
+                logMsg("Shai-Hulud took heavy ordnance fire and burrowed into deep subterranean sands!", "worm");
+              }
+            } else {
+              // Priority 3: Enemy building in range
+              const enemyB = buildings.find(b => b.house !== u.house && b.hp > 0 && Math.hypot(b.x + 0.5 - u.x, b.y + 0.5 - u.y) <= u.range);
+              if (enemyB && Math.random() < dt * 1.5) {
+                enemyB.hp = Math.max(0, enemyB.hp - u.dmg);
+                u.turretAngle = Math.atan2(enemyB.y + 0.5 - u.y, enemyB.x + 0.5 - u.x);
+                playSound('cannon');
+                addTracer(u.x * TILE, u.y * TILE, (enemyB.x + 0.5) * TILE, (enemyB.y + 0.5) * TILE);
+                addExplosion((enemyB.x + 0.5) * TILE, (enemyB.y + 0.5) * TILE, 16);
+              }
+            }
           }
         }
       });
 
-      // 2. Carryalls Airlift Flight (Harvesters & Critically Damaged Tanks)
+      // 2. Unit Collision Separation (Units maintain personal space, no stacking)
+      for (let i = 0; i < units.length; i++) {
+        const u1 = units[i];
+        if (u1.hp <= 0 || u1.airlifted) continue;
+        for (let j = i + 1; j < units.length; j++) {
+          const u2 = units[j];
+          if (u2.hp <= 0 || u2.airlifted) continue;
+          if (u1.isAir !== u2.isAir) continue; // Air and ground don't push each other
+
+          const minDist = u1.isAir ? 0.95 : 0.82;
+          const dx = u1.x - u2.x;
+          const dy = u1.y - u2.y;
+          const dist = Math.hypot(dx, dy);
+
+          if (dist < minDist && dist > 0.0001) {
+            const push = (minDist - dist) * 0.5;
+            const nx = dx / dist;
+            const ny = dy / dist;
+
+            u1.x = Math.max(0.5, Math.min(W - 0.5, u1.x + nx * push));
+            u1.y = Math.max(0.5, Math.min(H - 0.5, u1.y + ny * push));
+            u2.x = Math.max(0.5, Math.min(W - 0.5, u2.x - nx * push));
+            u2.y = Math.max(0.5, Math.min(H - 0.5, u2.y - ny * push));
+          }
+        }
+      }
+
+      // 3. Carryalls Airlift Flight (Harvesters & Critically Damaged Tanks)
       carryalls.forEach(c => {
         c.wingPhase = (c.wingPhase || 0) + dt * 14.0;
         if (c.state === 'idle') {
-          // Check 1: Harvester full or in worm panic
           const harv = units.find(u => u.house === c.house && u.type === 'Harvester' && u.hp > 0 && !u.airlifted && (u.spice >= u.maxSpice || u.wormPanic));
-          // Check 2: Badly damaged combat vehicle (hp < maxHp * 0.45) needing Repair Bay
           const damagedTank = units.find(u => u.house === c.house && u.hp > 0 && !u.airlifted && !u.isAir && u.type !== 'Harvester' && u.hp < u.maxHp * 0.45);
 
           if (harv) {
@@ -1610,61 +1908,59 @@
         } else if (c.state === 'flying_to_harvester' && c.targetUnit) {
           c.tx = c.targetUnit.x; c.ty = c.targetUnit.y;
           if (Math.hypot(c.x - c.targetUnit.x, c.y - c.targetUnit.y) < 0.6) {
-            c.state = 'carrying_to_refinery';
             c.carryingUnit = c.targetUnit;
             c.targetUnit.airlifted = true;
+            c.state = 'carrying_to_refinery';
             const ref = buildings.find(b => b.house === c.house && b.type === 'Refinery' && b.hp > 0);
             c.tx = ref ? ref.x + 0.5 : c.x;
             c.ty = ref ? ref.y + 0.5 : c.y;
+            playSound('build');
+            logMsg(`${c.house} Carryall secured Harvester. Airlifting to Refinery!`, 'air');
           }
         } else if (c.state === 'flying_to_tank' && c.targetUnit) {
           c.tx = c.targetUnit.x; c.ty = c.targetUnit.y;
           if (Math.hypot(c.x - c.targetUnit.x, c.y - c.targetUnit.y) < 0.6) {
-            c.state = 'carrying_to_repair';
             c.carryingUnit = c.targetUnit;
             c.targetUnit.airlifted = true;
+            c.state = 'carrying_to_repair';
             const rf = buildings.find(b => b.house === c.house && b.type === 'RepairFacility' && b.hp > 0);
             c.tx = rf ? rf.x + 0.5 : c.x;
             c.ty = rf ? rf.y + 0.5 : c.y;
-            playSound('repair');
-            logMsg(`${c.house} Carryall hooked damaged ${c.carryingUnit.type}! Air-transporting to Repair Bay.`, 'repair');
+            playSound('build');
+            logMsg(`${c.house} Carryall secured damaged ${c.targetUnit.type}. Airlifting to Repair Bay!`, 'air');
           }
         } else if (c.state === 'carrying_to_refinery') {
-          if (c.carryingUnit) {
-            c.carryingUnit.x = c.x; c.carryingUnit.y = c.y;
-          }
-          if (Math.hypot(c.x - c.tx, c.y - c.ty) < 0.6) {
+          const ref = buildings.find(b => b.house === c.house && b.type === 'Refinery' && b.hp > 0);
+          if (ref && Math.hypot(c.x - (ref.x + 0.5), c.y - (ref.y + 0.5)) < 0.6) {
             if (c.carryingUnit) {
+              c.carryingUnit.x = ref.x + 0.5;
+              c.carryingUnit.y = ref.y + 0.5;
               c.carryingUnit.airlifted = false;
-              credits[c.house] = Math.min(maxCapacity(c.house), credits[c.house] + c.carryingUnit.spice);
+              credits[c.house] = Math.min(maxCapacity(c.house), credits[c.house] + (c.carryingUnit.spice || 0));
               c.carryingUnit.spice = 0;
+              c.carryingUnit.wormPanic = false;
+              c.carryingUnit.tx = c.carryingUnit.x + (c.house === 'Atreides' ? 6 : -6);
+              c.carryingUnit.ty = c.carryingUnit.y + 5;
+              c.carryingUnit = null;
+              playSound('harvest');
+              logMsg(`${c.house} Harvester spice cargo delivered via Carryall airlift!`, 'economy');
             }
-            c.carryingUnit = null;
-            c.targetUnit = null;
-            c.state = 'returning';
-            c.tx = c.house === 'Atreides' ? 2.5 : W - 2.5;
-            c.ty = c.house === 'Atreides' ? 2.5 : H - 2.5;
+            c.state = 'idle';
           }
         } else if (c.state === 'carrying_to_repair') {
-          if (c.carryingUnit) {
-            c.carryingUnit.x = c.x; c.carryingUnit.y = c.y;
-          }
-          if (Math.hypot(c.x - c.tx, c.y - c.ty) < 0.6) {
+          const rf = buildings.find(b => b.house === c.house && b.type === 'RepairFacility' && b.hp > 0);
+          if (rf && Math.hypot(c.x - (rf.x + 0.5), c.y - (rf.y + 0.5)) < 0.6) {
             if (c.carryingUnit) {
+              c.carryingUnit.x = rf.x + 0.5;
+              c.carryingUnit.y = rf.y + 0.5;
               c.carryingUnit.airlifted = false;
               c.carryingUnit.repairing = true;
-              c.carryingUnit.x = c.tx;
-              c.carryingUnit.y = c.ty;
+              c.carryingUnit = null;
+              playSound('repair');
+              logMsg(`${c.house} Vehicle delivered to Repair Facility bay!`, 'repair');
             }
-            logMsg(`${c.house} Carryall safely landed ${c.carryingUnit ? c.carryingUnit.type : 'tank'} directly at Repair Facility!`, 'repair');
-            c.carryingUnit = null;
-            c.targetUnit = null;
-            c.state = 'returning';
-            c.tx = c.house === 'Atreides' ? 2.5 : W - 2.5;
-            c.ty = c.house === 'Atreides' ? 2.5 : H - 2.5;
+            c.state = 'idle';
           }
-        } else if (c.state === 'returning') {
-          if (Math.hypot(c.x - c.tx, c.y - c.ty) < 0.6) c.state = 'idle';
         }
 
         const cDist = Math.hypot(c.tx - c.x, c.ty - c.y);
@@ -1677,7 +1973,7 @@
         }
       });
 
-      // 3. Sandworms Undulation, Fatigue, Grayish Trail & Devour (Restricted to Sand/Dunes/Spice; Rock/Concrete Safe)
+      // 4. Sandworms Undulation, Limited Sensory Detection Range & Subterranean Behavior
       sandworms.forEach(w => {
         if (!w.submerged && !w.dormant) {
           let target = null, minDist = 999;
@@ -1685,15 +1981,33 @@
             if (u.hp > 0 && !u.airlifted && !u.isAir && u.type !== 'Saboteur') {
               const tx = Math.floor(u.x), ty = Math.floor(u.y);
               const uTile = (tiles[ty] && tiles[ty][tx]) || 'SAND';
-              // Units on ROCK, CONCRETE, MOUNTAIN, or CRATER are completely safe!
+              // Units on bedrock (ROCK, CONCRETE, MOUNTAIN, CRATER) are completely undetectable and safe!
               if (uTile === 'ROCK' || uTile === 'CONCRETE' || uTile === 'MOUNTAIN' || uTile === 'CRATER') return;
+
+              // Sandworms sense seismic vibrations through sand, not omniscient sight:
+              const isMoving = Math.hypot(u.tx - u.x, u.ty - u.y) > 0.15;
+              const isHeavy = u.type === 'Harvester' || u.type === 'SiegeTank';
+              const sensoryRadius = isHeavy ? 12.5 : (isMoving ? 9.0 : 4.5);
+
               const d = Math.hypot(u.x - w.x, u.y - w.y);
-              if (d < minDist) { minDist = d; target = u; }
+              if (d <= sensoryRadius && d < minDist) {
+                minDist = d;
+                target = u;
+              }
             }
           });
 
           if (target) {
             w.tx = target.x; w.ty = target.y;
+            w.patrolTimer = 0;
+          } else {
+            // No vibrations sensed: worm wanders dunes calmly or prepares to submerge
+            w.patrolTimer = (w.patrolTimer || 0) + dt;
+            if (w.patrolTimer > 6.0) {
+              w.patrolTimer = 0;
+              w.tx = Math.max(12, Math.min(W - 12, w.x + (Math.random() - 0.5) * 8));
+              w.ty = Math.max(8, Math.min(H - 8, w.y + (Math.random() - 0.5) * 8));
+            }
           }
 
           const wDist = Math.hypot(w.tx - w.x, w.ty - w.y);
@@ -1711,7 +2025,7 @@
             const heading = directAngle + waveOscillation;
             w.angle = smoothTurn(w.angle, heading, 3.5 * dt);
 
-            const wStep = Math.min(wDist, w.speed * dt);
+            const wStep = Math.min(wDist, (target ? w.speed : w.speed * 0.65) * dt);
             const nextX = w.x + Math.cos(w.angle) * wStep;
             const nextY = w.y + Math.sin(w.angle) * wStep;
             const nx = Math.floor(nextX);
@@ -1720,7 +2034,6 @@
 
             // Worm cannot enter ROCK, CONCRETE, MOUNTAIN, or CRATER!
             if (nTile === 'ROCK' || nTile === 'CONCRETE' || nTile === 'MOUNTAIN' || nTile === 'CRATER') {
-              // Try boundary deflections along sand
               const altAngle1 = w.angle + Math.PI * 0.45;
               const aX1 = w.x + Math.cos(altAngle1) * wStep;
               const aY1 = w.y + Math.sin(altAngle1) * wStep;
@@ -1783,6 +2096,15 @@
           }
         }
 
+        if (w.submerged) {
+          w.submergeTimer -= dt;
+          if (w.submergeTimer <= 0) {
+            w.submerged = false;
+            w.stamina = 100;
+            logMsg("A Sandworm breaches surface sand from deep subterranean depths!", "worm");
+          }
+        }
+
         if (w.dormant) {
           w.dormantTimer -= dt;
           w.stamina = Math.min(100, w.stamina + dt * 8);
@@ -1801,9 +2123,6 @@
       });
     }
 
-    /* =========================================================================
-       RENDERING ENGINE (Map, Buildings, Units, Aviation, Worm Trail, HUD)
-       ========================================================================= */
     function renderMap(animTime) {
       for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
@@ -2045,6 +2364,25 @@
         ctx.fillRect(px + 2, py + 1, 24, 2.5);
         ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : (hpPct > 0.25 ? '#eab308' : '#ef4444');
         ctx.fillRect(px + 2, py + 1, Math.floor(24 * hpPct), 2.5);
+
+        // Building Selection Highlight Box & Corner Brackets
+        if (selectedBuilding === b) {
+          ctx.strokeStyle = '#facc15';
+          ctx.lineWidth = 1.6;
+          ctx.setLineDash([4, 3]);
+          ctx.strokeRect(px + 1, py + 1, TILE - 2, TILE - 2);
+          ctx.setLineDash([]);
+
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2.0;
+          const clen = 5;
+          ctx.beginPath();
+          ctx.moveTo(px, py + clen); ctx.lineTo(px, py); ctx.lineTo(px + clen, py);
+          ctx.moveTo(px + TILE - clen, py); ctx.lineTo(px + TILE, py); ctx.lineTo(px + TILE, py + clen);
+          ctx.moveTo(px, py + TILE - clen); ctx.lineTo(px, py + TILE); ctx.lineTo(px + clen, py + TILE);
+          ctx.moveTo(px + TILE - clen, py + TILE); ctx.lineTo(px + TILE, py + TILE); ctx.lineTo(px + TILE, py + TILE - clen);
+          ctx.stroke();
+        }
       });
     }
 
@@ -2555,19 +2893,24 @@
     }
 
     function renderRadar(animTime) {
-      const rw = radarCanvas.width, rh = radarCanvas.height;
-      radarCtx.fillStyle = '#060911';
-      radarCtx.fillRect(0, 0, rw, rh);
+      const rw = radarCanvas.width;
+      const rh = radarCanvas.height;
+      radarCtx.clearRect(0, 0, rw, rh);
 
-      const cellW = rw / W, cellH = rh / H;
+      const cellW = rw / W;
+      const cellH = rh / H;
 
       for (let y = 0; y < H; y++) {
         for (let x = 0; x < W; x++) {
           const t = tiles[y][x];
-          if (t === 'ROCK' || t === 'MOUNTAIN') radarCtx.fillStyle = '#475569';
-          else if (t === 'CONCRETE') radarCtx.fillStyle = '#64748b';
-          else if (t === 'SPICE_THICK' || t === 'SPICE_THIN') radarCtx.fillStyle = '#f59e0b';
-          else radarCtx.fillStyle = '#785324';
+          radarCtx.fillStyle =
+            t === 'ROCK' ? '#475569' :
+            t === 'CONCRETE' ? '#64748b' :
+            t === 'SPICE_THICK' ? '#dc2626' :
+            t === 'SPICE_THIN' ? '#ea580c' :
+            t === 'MOUNTAIN' ? '#1e293b' :
+            t === 'CRATER' ? '#78350f' :
+            t === 'DUNES' ? '#d97706' : '#d4a359';
           radarCtx.fillRect(x * cellW, y * cellH, cellW + 0.5, cellH + 0.5);
         }
       }
@@ -2589,8 +2932,8 @@
 
       const viewScroll = canvasContainer.scrollLeft;
       const viewWidth = canvasContainer.clientWidth;
-      const rx = (viewScroll / 1344) * rw;
-      const rwBox = (viewWidth / 1344) * rw;
+      const rx = (viewScroll / (W * TILE)) * rw;
+      const rwBox = (viewWidth / (W * TILE)) * rw;
       radarCtx.strokeStyle = '#fef08a';
       radarCtx.lineWidth = 1;
       radarCtx.strokeRect(rx, 0, rwBox, rh);
