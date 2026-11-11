@@ -986,6 +986,79 @@ class TestDune3000Engine(unittest.TestCase):
         result = gs7.step_ai_commander("Atreides")
         self.assertEqual(result, "idle")
 
+    def test_step_carryall_rescue(self):
+        # Setup game state with Refinery and Harvester
+        gm = GridMap(10, 10)
+        gs = GameState(gm)
+        refinery = Building("Refinery", "Atreides", 1, 1, hp=400)
+        gs.buildings.append(refinery)
+
+        # Harvester in danger (distance <= 2 from sandworm)
+        harvester = Unit("Harvester", "Atreides", 5, 5, hp=100)
+        gs.units.append(harvester)
+        worm = Sandworm(5, 6)  # distance = 1
+        gs.sandworms.append(worm)
+
+        # Carryall should airlift harvester back to refinery
+        rescued = gs.step_carryall_rescue("Atreides")
+        self.assertEqual(rescued, 1)
+        self.assertEqual(harvester.x, 1)
+        self.assertEqual(harvester.y, 1)
+
+        # Harvester already at refinery is skipped
+        rescued2 = gs.step_carryall_rescue("Atreides")
+        self.assertEqual(rescued2, 0)
+
+        # No rescue if power efficiency is below 0.5
+        harvester2 = Unit("Harvester", "Atreides", 6, 6, hp=100)
+        gs.units.append(harvester2)
+        power_drain = Building("Barracks", "Atreides", 2, 2, power_produced=0, power_consumed=100)
+        gs.buildings.append(power_drain)
+        self.assertLess(gs.power_efficiency("Atreides"), 0.5)
+        rescued3 = gs.step_carryall_rescue("Atreides")
+        self.assertEqual(rescued3, 0)
+        self.assertEqual(harvester2.x, 6)
+
+        # No rescue if no alive refinery exists
+        refinery.hp = 0
+        gs.buildings.remove(power_drain)
+        rescued4 = gs.step_carryall_rescue("Atreides")
+        self.assertEqual(rescued4, 0)
+
+    def test_order_starport_unit(self):
+        gm = GridMap(10, 10)
+        gs = GameState(gm)
+        gs.credits["Atreides"] = 1000
+
+        # Ordering without Starport returns None
+        unit = gs.order_starport_unit("Atreides", "CombatTank", 2, 2)
+        self.assertIsNone(unit)
+
+        # Build alive Starport
+        starport = Building("Starport", "Atreides", 1, 1, hp=500)
+        gs.buildings.append(starport)
+
+        # Even tick: 20% discount on CombatTank (base=300 -> 300 * 0.8 = 240)
+        gs.tick_count = 0
+        unit_even = gs.order_starport_unit("Atreides", "CombatTank", 3, 3)
+        self.assertIsNotNone(unit_even)
+        self.assertEqual(unit_even.unit_type, "CombatTank")
+        self.assertEqual(unit_even.x, 3)
+        self.assertEqual(unit_even.y, 3)
+        self.assertEqual(gs.credits["Atreides"], 760)
+
+        # Odd tick: 20% surge on Trike (base=150 -> 150 * 1.2 = 180)
+        gs.tick_count = 1
+        unit_odd = gs.order_starport_unit("Atreides", "Trike", 4, 4)
+        self.assertIsNotNone(unit_odd)
+        self.assertEqual(unit_odd.unit_type, "Trike")
+        self.assertEqual(gs.credits["Atreides"], 760 - 180)
+
+        # Insufficient credits returns None
+        gs.credits["Atreides"] = 50
+        unit_fail = gs.order_starport_unit("Atreides", "CombatTank", 5, 5)
+        self.assertIsNone(unit_fail)
+
 
 if __name__ == "__main__":
     unittest.main()

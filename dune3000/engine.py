@@ -16,7 +16,7 @@ HOUSES = ("Atreides", "Harkonnen", "Ordos")
 
 UNIT_COSTS: Dict[str, int] = {"Trike": 150, "CombatTank": 300, "Harvester": 400}
 
-BUILDING_COSTS: Dict[str, int] = {"WindTrap": 200, "Refinery": 400, "Barracks": 250, "Silo": 150, "Starport": 500}
+BUILDING_COSTS: Dict[str, int] = {"WindTrap": 200, "Refinery": 400, "Barracks": 250, "Silo": 150, "Starport": 500, "Palace": 600}
 
 # Signature special vehicle of each Great House (spawned via GameState.spawn_special_unit).
 HOUSE_SPECIAL_UNITS: Dict[str, Dict] = {
@@ -436,6 +436,40 @@ class GameState:
         self.units.append(unit)
         return unit
 
+    def step_carryall_rescue(self, house: str) -> int:
+        """Airlift spice harvesters in peril back to the nearest refinery.
+
+        If no alive Refinery exists for house or power_efficiency(house) < 0.5,
+        no rescue can be performed and 0 is returned.
+        Otherwise, for each alive Harvester within Manhattan distance <= 2 of any
+        sandworm, teleports/airlifts the Harvester to the Refinery's tile.
+        """
+        refinery: Optional[Building] = None
+        for b in self.buildings:
+            if b.house == house and b.building_type == "Refinery" and b.hp > 0:
+                refinery = b
+                break
+
+        if refinery is None or self.power_efficiency(house) < 0.5:
+            return 0
+
+        rescued = 0
+        for u in self.units:
+            if u.hp > 0 and u.house == house and u.unit_type == "Harvester":
+                if (u.x, u.y) == (refinery.x, refinery.y):
+                    continue
+                in_danger = False
+                for w in self.sandworms:
+                    if abs(u.x - w.x) + abs(u.y - w.y) <= 2:
+                        in_danger = True
+                        break
+                if in_danger:
+                    u.x = refinery.x
+                    u.y = refinery.y
+                    rescued += 1
+
+        return rescued
+
     def spawn_special_unit(self, house: str, x: int, y: int) -> Optional[Unit]:
         """Spawn the house's signature special unit for SPECIAL_UNIT_COST credits.
 
@@ -622,6 +656,43 @@ class GameState:
                 modified += 1
 
         return modified
+
+    def fire_death_hand(self, house: str, target_x: int, target_y: int) -> int:
+        """Fire the Palace superweapon Death Hand missile at (target_x, target_y).
+
+        Requires the house to own at least one alive (hp > 0) Palace building;
+        otherwise nothing is fired and 0 is returned.
+
+        Splash damage is applied to every alive enemy unit and building based on
+        Manhattan distance from the impact point:
+            dist == 0 -> 150 damage
+            dist == 1 -> 75 damage
+
+        Returns the total actual damage dealt across all hit enemy units and
+        buildings (each hit's actual damage is min(target.hp, listed damage)).
+        """
+        has_palace = any(
+            b.building_type == "Palace" and b.house == house and b.hp > 0
+            for b in self.buildings
+        )
+        if not has_palace:
+            return 0
+
+        total_damage = 0
+        for obj in self.units + self.buildings:
+            if obj.house == house or obj.hp <= 0:
+                continue
+            dist = abs(obj.x - target_x) + abs(obj.y - target_y)
+            if dist == 0:
+                damage = 150
+            elif dist == 1:
+                damage = 75
+            else:
+                continue
+            actual = min(obj.hp, damage)
+            obj.hp -= actual
+            total_damage += actual
+        return total_damage
 
     def to_dict(self) -> Dict:
         """Serialize the game state to a dictionary for JSON snapshot.
