@@ -76,6 +76,7 @@
     <span>Power: <span id="hud-power" class="hud-stat">100 / 30 (100%)</span></span>
     <span>Tick: <span id="hud-tick" class="hud-stat">0</span></span>
     <span>Status: <span id="hud-status" class="hud-stat">Battle Active</span></span>
+    <span>Opponent: <span id="hud-opponent" class="hud-stat">Script AI</span></span>
   </div>
   <div id="controls">
     <button id="btn-select-mode" class="active" onclick="setMode('select')">Select / Command Unit</button>
@@ -88,6 +89,7 @@
     <button id="btn-train-tank" onclick="trainUnit('CombatTank', 300)">Train CombatTank (300)</button>
     <button id="btn-step-tick" onclick="stepTick()">Step Tick</button>
     <button id="btn-autoplay" onclick="toggleAutoplay()">Auto-Play: ON</button>
+    <button id="btn-gpu" onclick="toggleGpuMode()" title="Opponent (Harkonnen) is commanded by the local LLM on the GPU; falls back to the script AI if the GPU is busy or offline">Play against GPU: OFF</button>
   </div>
   <div id="main-area">
     <canvas id="gameCanvas" width="512" height="512"></canvas>
@@ -255,8 +257,9 @@
           }
         }
       }
-      // Harkonnen AI: periodically send tanks toward Atreides base
-      if (tickCount % 8 === 0 && credits.Harkonnen >= 300) {
+      // Harkonnen: GPU LLM commander (every 6 ticks, never overlapping) or scripted AI
+      if (gpuMode && tickCount % 6 === 0) { requestGpuMove(); }
+      if (!gpuMode && tickCount % 8 === 0 && credits.Harkonnen >= 300) {
         credits.Harkonnen -= 300;
         units.push({ type: 'CombatTank', house: 'Harkonnen', x: 12, y: 13, tx: 2, ty: 2, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 22, range: 3 });
         logMsg('Harkonnen deployed a CombatTank!');
@@ -340,6 +343,61 @@
       document.getElementById('hud-status').textContent = !harAlive ? 'Atreides Victory!' : (!atrAlive ? 'Harkonnen Victory!' : 'Battle Active');
     }
 
+    let gpuMode = false, gpuBusy = false;
+    const HAR_UNIT_COSTS = { Trike: 150, CombatTank: 300, Harvester: 400 };
+    function setOpponentLabel(t) { document.getElementById('hud-opponent').textContent = t; }
+    function toggleGpuMode() {
+      gpuMode = !gpuMode;
+      document.getElementById('btn-gpu').textContent = 'Play against GPU: ' + (gpuMode ? 'ON' : 'OFF');
+      setOpponentLabel(gpuMode ? 'GPU LLM (Qwen3.5-4B)' : 'Script AI');
+      logMsg(gpuMode ? 'Opponent is now the GPU LLM.' : 'Opponent is now the script AI.');
+    }
+    function compactState() {
+      const har = units.filter(u => u.house === 'Harkonnen').map(u => [u.type, u.x, u.y, u.hp]);
+      const atr = units.filter(u => u.house === 'Atreides').map(u => [u.type, u.x, u.y, u.hp]);
+      return { width: W, height: H, tick: tickCount, credits: credits.Harkonnen, units: har, enemy_units: atr };
+    }
+    function requestGpuMove() {
+      if (gpuBusy) return;
+      gpuBusy = true;
+      setOpponentLabel('GPU thinking...');
+      const ctl = new AbortController();
+      const to = setTimeout(() => ctl.abort(), 45000);
+      fetch('/api/dune3000/gpu-opponent', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(compactState()), signal: ctl.signal })
+        .then(r => r.json())
+        .then(d => {
+          if (d && d.ok && d.command) { applyGpuCommand(d.command); setOpponentLabel('GPU LLM: ' + d.command.op); }
+          else { scriptFallbackMove(); setOpponentLabel('GPU unavailable, script AI fallback'); }
+        })
+        .catch(() => { scriptFallbackMove(); setOpponentLabel('GPU offline, script AI fallback'); })
+        .finally(() => { clearTimeout(to); gpuBusy = false; });
+    }
+    function scriptFallbackMove() {
+      if (credits.Harkonnen >= 300) applyGpuCommand({ op: 'TRAIN', unit: 'CombatTank' });
+      else applyGpuCommand({ op: 'ATTACK', x: 2, y: 2 });
+    }
+    function applyGpuCommand(c) {
+      if (c.op === 'TRAIN') {
+        const cost = HAR_UNIT_COSTS[c.unit];
+        if (!cost || credits.Harkonnen < cost) { logMsg('GPU commander: cannot afford ' + c.unit); return; }
+        credits.Harkonnen -= cost;
+        const tank = c.unit === 'CombatTank';
+        units.push({ type: c.unit, house: 'Harkonnen', x: 12, y: 13, tx: 2, ty: 2, hp: tank ? 140 : 90, maxHp: tank ? 140 : 90,
+          spice: 0, maxSpice: c.unit === 'Harvester' ? 700 : 0, dmg: tank ? 22 : (c.unit === 'Trike' ? 15 : 5), range: tank ? 3 : 2 });
+        logMsg('GPU commander trained ' + c.unit + '.');
+      } else if (c.op === 'BUILD') {
+        const cost = BUILDING_COSTS[c.building];
+        if (!cost || credits.Harkonnen < cost || buildings.some(b => b.x === c.x && b.y === c.y)) { logMsg('GPU commander: build rejected'); return; }
+        credits.Harkonnen -= cost;
+        buildings.push({ type: c.building, house: 'Harkonnen', x: c.x, y: c.y, hp: 200, maxHp: 400,
+          pProd: c.building === 'WindTrap' ? 100 : 0, pCons: c.building === 'WindTrap' ? 0 : 30 });
+        logMsg('GPU commander built ' + c.building + ' at (' + c.x + ', ' + c.y + ').');
+      } else if (c.op === 'ATTACK') {
+        units.filter(u => u.house === 'Harkonnen' && u.type !== 'Harvester').forEach(u => { u.tx = c.x; u.ty = c.y; });
+        logMsg('GPU commander orders attack on (' + c.x + ', ' + c.y + ').');
+      }
+    }
     let autoTimer = setInterval(stepTick, 1200);
     function toggleAutoplay() {
       const btn = document.getElementById('btn-autoplay');
