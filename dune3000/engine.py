@@ -126,6 +126,12 @@ class GameState:
         consumed = sum(b.power_consumed for b in self.buildings if b.house == house and b.hp > 0)
         return produced, consumed
 
+    def power_efficiency(self, house: str) -> float:
+        produced, consumed = self.power_balance(house)
+        if consumed <= 0 or produced >= consumed:
+            return 1.0
+        return max(0.25, round(produced / consumed, 4))
+
     def place_building(self, building: Building) -> Building:
         tile = self.game_map.get_tile(building.x, building.y)
         if tile == CONCRETE:
