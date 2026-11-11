@@ -231,6 +231,29 @@ class GameState:
             return 1.0
         return max(0.25, round(produced / consumed, 4))
 
+    def check_winner(self) -> Optional[str]:
+        """Check if the game has a winner or a draw.
+
+        Returns:
+            The name of the winning house if only one house has alive buildings/units,
+            "Draw" if no houses have any alive buildings or units,
+            None if two or more houses still have alive buildings/units.
+        """
+        active_houses: set[str] = set()
+        for b in self.buildings:
+            if b.hp > 0:
+                active_houses.add(b.house)
+        for u in self.units:
+            if u.hp > 0:
+                active_houses.add(u.house)
+
+        if len(active_houses) == 1:
+            return next(iter(active_houses))
+        elif len(active_houses) == 0:
+            return "Draw"
+        else:
+            return None
+
     def max_spice_capacity(self, house: str) -> int:
         """Calculate maximum spice capacity for a house.
         
