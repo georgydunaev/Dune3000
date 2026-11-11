@@ -778,6 +778,23 @@ class GameState:
             self.units.remove(unit)
         return True
 
+    def apply_sandstorm(self, center_x: int, center_y: int, radius: int = 2) -> int:
+        """Simulate a Coriolis sandstorm centered at (center_x, center_y).
+
+        Deals 15 damage to every alive unit within Manhattan distance <= radius
+        located on exposed terrain (not on ROCK or CONCRETE).
+        Returns the number of units damaged.
+        """
+        damaged_count = 0
+        for u in self.units:
+            if u.hp > 0:
+                if abs(u.x - center_x) + abs(u.y - center_y) <= radius:
+                    tile = self.game_map.get_tile(u.x, u.y)
+                    if tile not in (ROCK, CONCRETE):
+                        u.hp = max(0, u.hp - 15)
+                        damaged_count += 1
+        return damaged_count
+
     def to_dict(self) -> Dict:
         """Serialize the game state to a dictionary for JSON snapshot.
         
