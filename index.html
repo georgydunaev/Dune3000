@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dune 3000 - Algorithmic RTS Prototype</title>
+  <style>
+    body { background: #141318; color: #e2e8f0; font-family: monospace; margin: 24px; }
+    canvas { border: 2px solid #5c6370; background: #e5c07b; image-rendering: pixelated; }
+  </style>
+</head>
+<body>
+  <h2>Dune 3000 (Algorithmic Graphics RTS Prototype)</h2>
+  <p>Houses: Atreides | Harkonnen | Ordos. Graphics generated procedurally by algorithms.</p>
+  <canvas id="gameCanvas" width="512" height="512"></canvas>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const TILE = 32;
+    for (let y = 0; y < 16; y++) {
+      for (let x = 0; x < 16; x++) {
+        const isRock = (x < 4 && y < 4);
+        const isSpice = (x > 10 && y > 10);
+        ctx.fillStyle = isRock ? '#5c6370' : (isSpice ? '#be5046' : '#e5c07b');
+        ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+        ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+        ctx.strokeRect(x * TILE, y * TILE, TILE, TILE);
+      }
+    }
+  </script>
+</body>
+</html>
