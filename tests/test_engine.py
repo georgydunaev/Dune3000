@@ -1113,6 +1113,47 @@ class TestDune3000Engine(unittest.TestCase):
         # Test 4: BUILDING_COSTS includes Palace at 600.
         self.assertEqual(BUILDING_COSTS.get("Palace"), 600)
 
+    def test_step_turrets(self):
+        """test_step_turrets: GunTurret auto-fire (rng 3, dmg 30), RocketTurret (rng 5, dmg 45, power >= 1.0)."""
+        self.assertEqual(BUILDING_COSTS.get("GunTurret"), 250)
+        self.assertEqual(BUILDING_COSTS.get("RocketTurret"), 350)
+
+        # 1. GunTurret damages enemy within range 3 even without power generator
+        gs = GameState(GridMap(10, 10))
+        gun = Building("GunTurret", "Atreides", 2, 2, hp=250)
+        gs.buildings.append(gun)
+        enemy = Unit("Trike", "Harkonnen", 4, 3, hp=50)  # dist = |4-2| + |3-2| = 3
+        gs.units.append(enemy)
+
+        dmg = gs.step_turrets()
+        self.assertEqual(dmg, 30)
+        self.assertEqual(enemy.hp, 20)
+
+        # 2. RocketTurret with power >= 1.0 fires at range 5
+        gs2 = GameState(GridMap(10, 10))
+        rocket = Building("RocketTurret", "Atreides", 1, 1, hp=350)
+        gs2.buildings.append(rocket)
+        # power balance is 0/0 -> efficiency 1.0
+        enemy2 = Unit("CombatTank", "Harkonnen", 5, 2, hp=100)  # dist = |5-1| + |2-1| = 5
+        gs2.units.append(enemy2)
+
+        dmg2 = gs2.step_turrets()
+        self.assertEqual(dmg2, 45)
+        self.assertEqual(enemy2.hp, 55)
+
+        # 3. RocketTurret under low power (< 1.0) cannot fire
+        gs3 = GameState(GridMap(10, 10))
+        rocket3 = Building("RocketTurret", "Atreides", 1, 1, hp=350)
+        drain = Building("Factory", "Atreides", 0, 0, power_produced=0, power_consumed=100)
+        gs3.buildings.extend([rocket3, drain])
+        self.assertLess(gs3.power_efficiency("Atreides"), 1.0)
+        enemy3 = Unit("Trike", "Harkonnen", 3, 2, hp=50)
+        gs3.units.append(enemy3)
+
+        dmg3 = gs3.step_turrets()
+        self.assertEqual(dmg3, 0)
+        self.assertEqual(enemy3.hp, 50)
+
 
 if __name__ == "__main__":
     unittest.main()

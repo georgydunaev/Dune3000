@@ -16,7 +16,7 @@ HOUSES = ("Atreides", "Harkonnen", "Ordos")
 
 UNIT_COSTS: Dict[str, int] = {"Trike": 150, "CombatTank": 300, "Harvester": 400}
 
-BUILDING_COSTS: Dict[str, int] = {"WindTrap": 200, "Refinery": 400, "Barracks": 250, "Silo": 150, "Starport": 500, "Palace": 600}
+BUILDING_COSTS: Dict[str, int] = {"WindTrap": 200, "Refinery": 400, "Barracks": 250, "Silo": 150, "Starport": 500, "Palace": 600, "GunTurret": 250, "RocketTurret": 350}
 
 # Signature special vehicle of each Great House (spawned via GameState.spawn_special_unit).
 HOUSE_SPECIAL_UNITS: Dict[str, Dict] = {
@@ -692,6 +692,41 @@ class GameState:
             actual = min(obj.hp, damage)
             obj.hp -= actual
             total_damage += actual
+        return total_damage
+
+    def step_turrets(self) -> int:
+        """Execute automated defensive fire for all alive GunTurret and RocketTurret buildings.
+
+        - GunTurret: range 3, damage 30 (fires regardless of power level).
+        - RocketTurret: range 5, damage 45 (requires full power_efficiency >= 1.0).
+
+        For each turret, finds the first alive enemy unit within Manhattan distance <= rng,
+        deals min(u.hp, dmg) damage, and returns the total damage dealt across all turrets.
+        """
+        total_damage = 0
+        for b in self.buildings:
+            if b.hp <= 0:
+                continue
+            if b.building_type == "GunTurret":
+                rng = 3
+                dmg = 30
+            elif b.building_type == "RocketTurret":
+                if self.power_efficiency(b.house) < 1.0:
+                    continue
+                rng = 5
+                dmg = 45
+            else:
+                continue
+
+            for u in self.units:
+                if u.hp > 0 and u.house != b.house:
+                    dist = abs(u.x - b.x) + abs(u.y - b.y)
+                    if dist <= rng:
+                        actual = min(u.hp, dmg)
+                        u.hp -= actual
+                        total_damage += actual
+                        break
+
         return total_damage
 
     def to_dict(self) -> Dict:
