@@ -701,7 +701,7 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertIn("#ff4500", exp0)
         self.assertNotEqual(exp0, exp1)
 
-def test_repair_building(self):
+    def test_repair_building(self):
         """test_repair_building: verify normal repair, credit deduction, clamping at max_hp, and dead building rejection."""
         # Test 1: Normal repair - missing=50, cost=(50+1)//2=25, 25 credits restore 50 HP
         gs = GameState(GridMap(8, 8))

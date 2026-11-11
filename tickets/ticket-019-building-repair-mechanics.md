@@ -1,6 +1,6 @@
 # Ticket 19: Implement Building Repair Mechanics (`GameState.repair_building`)
 
-**State:** open
+**State:** closed
 **Labels:** dune3000, gameplay, economy
 
 ## Context
