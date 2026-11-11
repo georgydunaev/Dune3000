@@ -729,6 +729,23 @@ class GameState:
 
         return total_damage
 
+    def sell_building(self, building: Building) -> int:
+        """Sell a structure to recover up to 50% credit refund proportional to HP.
+
+        If building not in self.buildings or building.hp <= 0, returns 0.
+        Otherwise computes refund = max(1, int((cost * building.hp) // (2 * building.max_hp))),
+        sets building.hp = 0, removes it from self.buildings, refunds credits via self.add_credits,
+        and returns the refund amount.
+        """
+        if building not in self.buildings or building.hp <= 0:
+            return 0
+        cost = BUILDING_COSTS.get(building.building_type, 250)
+        refund = max(1, int((cost * building.hp) // (2 * building.max_hp)))
+        building.hp = 0
+        self.buildings.remove(building)
+        self.add_credits(building.house, refund)
+        return refund
+
     def to_dict(self) -> Dict:
         """Serialize the game state to a dictionary for JSON snapshot.
         

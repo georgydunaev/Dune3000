@@ -1154,6 +1154,36 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertEqual(dmg3, 0)
         self.assertEqual(enemy3.hp, 50)
 
+    def test_sell_building(self):
+        """test_sell_building: 50% proportional HP refund, removal from buildings list."""
+        gm = GridMap(10, 10)
+        gs = GameState(gm)
+        gs.credits["Atreides"] = 500
+
+        # 1. Full HP Refinery (cost=400, max_hp=400, hp=400) -> refund 200
+        refinery = Building("Refinery", "Atreides", 2, 2, hp=400, max_hp=400)
+        gs.buildings.append(refinery)
+        refund1 = gs.sell_building(refinery)
+        self.assertEqual(refund1, 200)
+        self.assertEqual(refinery.hp, 0)
+        self.assertNotIn(refinery, gs.buildings)
+        self.assertEqual(gs.credits["Atreides"], 700)
+
+        # 2. Half HP Refinery (hp=200/400) -> refund 100
+        refinery_half = Building("Refinery", "Atreides", 3, 3, hp=200, max_hp=400)
+        gs.buildings.append(refinery_half)
+        refund2 = gs.sell_building(refinery_half)
+        self.assertEqual(refund2, 100)
+        self.assertEqual(refinery_half.hp, 0)
+        self.assertNotIn(refinery_half, gs.buildings)
+        self.assertEqual(gs.credits["Atreides"], 800)
+
+        # 3. Selling a building not in gs.buildings returns 0
+        unplaced = Building("Barracks", "Atreides", 4, 4, hp=250, max_hp=250)
+        refund3 = gs.sell_building(unplaced)
+        self.assertEqual(refund3, 0)
+        self.assertEqual(gs.credits["Atreides"], 800)
+
 
 if __name__ == "__main__":
     unittest.main()
