@@ -98,6 +98,56 @@ class TestDune3000Engine(unittest.TestCase):
         # Normal power: no consumption -> full efficiency.
         self.assertEqual(gs.power_efficiency("Atreides"), 1.0)
 
+    def test_unit_move_towards(self):
+        # Test moving towards a target with x > self.x (move right)
+        gm = GridMap(8, 8)
+        unit = Unit("TestUnit", "Atreides", 2, 2)
+        unit.move_towards(5, 2, gm)
+        self.assertEqual(unit.x, 3)
+        self.assertEqual(unit.y, 2)
+
+        # Test moving towards a target with x < self.x (move left)
+        unit = Unit("TestUnit", "Atreides", 5, 2)
+        unit.move_towards(2, 2, gm)
+        self.assertEqual(unit.x, 4)
+        self.assertEqual(unit.y, 2)
+
+        # Test moving towards a target with same x, y > self.y (move down)
+        unit = Unit("TestUnit", "Atreides", 3, 2)
+        unit.move_towards(3, 5, gm)
+        self.assertEqual(unit.x, 3)
+        self.assertEqual(unit.y, 3)
+
+        # Test moving towards a target with same x, y < self.y (move up)
+        unit = Unit("TestUnit", "Atreides", 3, 5)
+        unit.move_towards(3, 2, gm)
+        self.assertEqual(unit.x, 3)
+        self.assertEqual(unit.y, 4)
+
+        # Test clamping at map bounds (can't go beyond width-1)
+        unit = Unit("TestUnit", "Atreides", 7, 4)
+        unit.move_towards(100, 4, gm)  # target far to the right
+        self.assertEqual(unit.x, 7)  # clamped to width-1=7
+        self.assertEqual(unit.y, 4)
+
+        # Test clamping at map bounds (can't go below 0)
+        unit = Unit("TestUnit", "Atreides", 0, 4)
+        unit.move_towards(-100, 4, gm)  # target far to the left
+        self.assertEqual(unit.x, 0)  # clamped to 0
+        self.assertEqual(unit.y, 4)
+
+        # Test moving diagonally: x changes first, then y
+        unit = Unit("TestUnit", "Atreides", 2, 2)
+        unit.move_towards(5, 5, gm)
+        self.assertEqual(unit.x, 3)
+        self.assertEqual(unit.y, 2)  # only x moved because x changed
+
+        # Test target is same position (no movement)
+        unit = Unit("TestUnit", "Atreides", 3, 3)
+        unit.move_towards(3, 3, gm)
+        self.assertEqual(unit.x, 3)
+        self.assertEqual(unit.y, 3)
+
     def test_max_spice_capacity(self):
         """max_spice_capacity: base 1000, +1000 per alive Refinery, +1000 per alive Silo."""
         gs = GameState(GridMap(8, 8))
@@ -250,6 +300,78 @@ class TestDune3000Engine(unittest.TestCase):
         svg1 = generate_building_svg("Refinery", "Atreides", size=32)
         svg2 = generate_building_svg("Refinery", "Atreides", size=32)
         self.assertEqual(svg1, svg2)
+
+    def test_unit_move_towards(self):
+        """test_unit_move_towards: Unit.move_towards basic movement and bounds clamping."""
+        # Test 1: Move right (x increases)
+        gs = GameState(GridMap(8, 8))
+        harv = Unit("Harvester", "Atreides", 2, 2)
+        gs.units.append(harv)
+        result = harv.move_towards(5, 2, gs.game_map)
+        self.assertEqual(result, (3, 2))
+        self.assertEqual(harv.x, 3)
+        self.assertEqual(harv.y, 2)
+
+        # Test 2: Move left (x decreases)
+        gs2 = GameState(GridMap(8, 8))
+        harv2 = Unit("Harvester", "Harkonnen", 5, 4)
+        gs2.units.append(harv2)
+        result = harv2.move_towards(1, 4, gs2.game_map)
+        self.assertEqual(result, (4, 4))
+        self.assertEqual(harv2.x, 4)
+        self.assertEqual(harv2.y, 4)
+
+        # Test 3: Target same x, move y (diagonal not allowed - move x first, then y)
+        gs3 = GameState(GridMap(8, 8))
+        harv3 = Unit("Harvester", "Ordos", 3, 3)
+        gs3.units.append(harv3)
+        result = harv3.move_towards(3, 6, gs3.game_map)
+        self.assertEqual(result, (3, 4))
+        self.assertEqual(harv3.x, 3)
+        self.assertEqual(harv3.y, 4)
+
+        # Test 4: Target same position (no movement needed)
+        gs4 = GameState(GridMap(8, 8))
+        harv4 = Unit("Harvester", "Atreides", 4, 4)
+        gs4.units.append(harv4)
+        result = harv4.move_towards(4, 4, gs4.game_map)
+        self.assertEqual(result, (4, 4))
+        self.assertEqual(harv4.x, 4)
+        self.assertEqual(harv4.y, 4)
+
+        # Test 5: Bounds clamping - move right beyond map width
+        gs5 = GameState(GridMap(5, 5))
+        harv5 = Unit("Harvester", "Atreides", 3, 3)
+        gs5.units.append(harv5)
+        result = harv5.move_towards(100, 100, gs5.game_map)
+        self.assertEqual(result, (4, 3))  # nx clamped to width-1=4, ny stays at 3 (x changed so no y move)
+        self.assertEqual(harv5.x, 4)
+        self.assertEqual(harv5.y, 3)
+
+        # Test 6: Bounds clamping - move down beyond map height
+        gs6 = GameState(GridMap(5, 5))
+        harv6 = Unit("Harvester", "Atreides", 3, 3)
+        gs6.units.append(harv6)
+        result = harv6.move_towards(3, 100, gs6.game_map)
+        self.assertEqual(result, (3, 4))  # nx stays 3 (no x change), ny clamped to height-1=4
+        self.assertEqual(harv6.x, 3)
+        self.assertEqual(harv6.y, 4)
+
+        # Test 7: Move towards target where x doesn't change, then y moves
+        gs7 = GameState(GridMap(8, 8))
+        harv7 = Unit("Harvester", "Atreides", 5, 5)
+        gs7.units.append(harv7)
+        result = harv7.move_towards(5, 1, gs7.game_map)
+        self.assertEqual(result, (5, 4))
+        self.assertEqual(harv7.x, 5)
+        self.assertEqual(harv7.y, 4)
+
+        # Test 8: Move towards target where x doesn't change, y decreases
+        gs8 = GameState(GridMap(8, 8))
+        harv8 = Unit("Harvester", "Atreides", 5, 5)
+        gs8.units.append(harv8)
+        result = harv8.move_towards(5, 1, gs8.game_map)
+        self.assertEqual(result, (5, 4))
 
 
 if __name__ == "__main__":

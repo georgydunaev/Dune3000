@@ -38,6 +38,44 @@ class Unit:
     spice_carried: int = 0
     max_spice: int = 700
 
+    def move_towards(self, target_x: int, target_y: int, game_map: "GridMap") -> Tuple[int, int]:
+        """
+        Move one step towards the target position.
+
+        Movement order:
+        1. Move along X axis towards target_x (1 tile step).
+        2. If X didn't change, move along Y axis towards target_y (1 tile step).
+        3. Clamp resulting coordinates to game_map bounds.
+        4. Update self.x and self.y, return the new position.
+        """
+        # Step 1: Move along X axis
+        if self.x < target_x:
+            nx = self.x + 1
+        elif self.x > target_x:
+            nx = self.x - 1
+        else:
+            nx = self.x
+
+        # Step 2: Move along Y axis only if X didn't change
+        if nx != self.x:
+            ny = self.y
+        elif self.y < target_y:
+            ny = self.y + 1
+        elif self.y > target_y:
+            ny = self.y - 1
+        else:
+            ny = self.y
+
+        # Step 3: Clamp to game_map bounds
+        nx = max(0, min(game_map.width - 1, nx))
+        ny = max(0, min(game_map.height - 1, ny))
+
+        # Step 4: Update and return
+        self.x = nx
+        self.y = ny
+        return (self.x, self.y)
+
+
     def step_harvest(self, game_map: "GridMap", refinery: Optional[Building], game_state: "GameState") -> int:
         """
         Harvests spice from the current tile or unloads at the refinery.
