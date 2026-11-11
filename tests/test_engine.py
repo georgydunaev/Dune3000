@@ -1480,6 +1480,28 @@ class TestDune3000Engine(unittest.TestCase):
         res_unknown = gs.trade_spice("Corrino", 50, buy=True)
         self.assertEqual(res_unknown, 0)
 
+    def test_sardaukar_and_advanced_infantry(self):
+        """Test unit costs and registration for Sardaukar, RocketTrooper, and FremenWarrior."""
+        from dune3000.engine import UNIT_COSTS
+        self.assertEqual(UNIT_COSTS.get("Sardaukar"), 300)
+        self.assertEqual(UNIT_COSTS.get("RocketTrooper"), 180)
+        self.assertEqual(UNIT_COSTS.get("FremenWarrior"), 220)
+        self.assertEqual(UNIT_COSTS.get("Engineer"), 200)
+
+        sard = Unit("Sardaukar", "Harkonnen", 5, 5, hp=220)
+        self.assertEqual(sard.unit_type, "Sardaukar")
+        self.assertEqual(sard.hp, 220)
+
+    def test_air_defense_and_sietch_structures(self):
+        """Test building costs for AirDefense and FremenSietch."""
+        from dune3000.engine import BUILDING_COSTS
+        self.assertEqual(BUILDING_COSTS.get("AirDefense"), 350)
+        self.assertEqual(BUILDING_COSTS.get("FremenSietch"), 500)
+
+        ad = Building("AirDefense", "Atreides", 4, 4, hp=420)
+        self.assertEqual(ad.building_type, "AirDefense")
+        self.assertEqual(ad.hp, 420)
+
 
 if __name__ == "__main__":
     unittest.main()

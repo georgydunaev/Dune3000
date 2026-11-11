@@ -386,15 +386,19 @@
       <button id="btn-build-repair" class="btn-prod" onclick="setMode('RepairFacility')" data-req="HeavyFactory">Repair Facility (350)</button>
       <button id="btn-build-gunturret" class="btn-prod" onclick="setMode('GunTurret')" data-req="Barracks">Gun Turret (250)</button>
       <button id="btn-build-rocketturret" class="btn-prod" onclick="setMode('RocketTurret')" data-req="Outpost">Rocket Turret (350)</button>
+      <button id="btn-build-airdefense" class="btn-prod" onclick="setMode('AirDefense')" data-req="Outpost,HighTech">SAM Air Defense (350)</button>
       <button id="btn-build-starport" class="btn-prod" onclick="setMode('Starport')" data-req="HeavyFactory,Outpost">CHOAM Starport (500)</button>
       <button id="btn-build-palace" class="btn-prod" onclick="setMode('Palace')" data-req="HeavyFactory,Outpost,HighTech">Palace Fortress (800)</button>
     </div>
 
     <!-- TAB: INFANTRY -->
     <div id="tab-infantry" class="tab-content">
-      <button id="btn-train-infantry" class="btn-prod" onclick="trainUnit('LightInfantry', 100)" data-req="Barracks">Train Light Infantry (100)</button>
-      <button id="btn-train-engineer" class="btn-prod" onclick="trainUnit('Engineer', 200)" data-req="Barracks,Outpost">Train Engineer (200)</button>
-      <button id="btn-train-saboteur" class="btn-prod" onclick="trainUnit('Saboteur', 250)" data-req="Palace">Train Saboteur (250)</button>
+      <button id="btn-train-infantry" class="btn-prod" onclick="trainUnit('LightInfantry', 100)" data-req="Barracks">Light Infantry (100)</button>
+      <button id="btn-train-rockettrooper" class="btn-prod" onclick="trainUnit('RocketTrooper', 180)" data-req="Barracks,Outpost">Rocket Trooper (180)</button>
+      <button id="btn-train-engineer" class="btn-prod" onclick="trainUnit('Engineer', 200)" data-req="Barracks,Outpost">Field Engineer (200)</button>
+      <button id="btn-train-sardaukar" class="btn-prod" onclick="trainUnit('Sardaukar', 300)" data-req="Barracks,Starport">Imperial Sardaukar (300)</button>
+      <button id="btn-train-fremen" class="btn-prod" onclick="trainUnit('FremenWarrior', 220)" data-req="Barracks,Palace">Fedaykin Warrior (220)</button>
+      <button id="btn-train-saboteur" class="btn-prod" onclick="trainUnit('Saboteur', 250)" data-req="Palace">Saboteur (250)</button>
     </div>
 
     <!-- TAB: VEHICLES -->
@@ -802,7 +806,9 @@
     const HOUSE_COLORS = {
       Atreides: { main: '#3b82f6', dark: '#1d4ed8', light: '#93c5fd', accent: '#60a5fa' },
       Harkonnen: { main: '#ef4444', dark: '#b91c1c', light: '#fca5a5', accent: '#f87171' },
-      Ordos: { main: '#10b981', dark: '#047857', light: '#6ee7b7', accent: '#34d399' }
+      Ordos: { main: '#10b981', dark: '#047857', light: '#6ee7b7', accent: '#34d399' },
+      Sardaukar: { main: '#a855f7', dark: '#6b21a8', light: '#d8b4fe', accent: '#c084fc' },
+      Fremen: { main: '#eab308', dark: '#a16207', light: '#fde047', accent: '#ca8a04' }
     };
 
     const BUILDING_SPECS = {
@@ -820,7 +826,9 @@
       GunTurret: { cost: 250, hp: 350, pProd: 0, pCons: 20, range: 4.5, dmg: 22, label: 'Gun Turret' },
       RocketTurret: { cost: 350, hp: 350, pProd: 0, pCons: 45, range: 6.5, dmg: 45, label: 'Rocket Turret' },
       Starport: { cost: 500, hp: 500, pProd: 0, pCons: 40, label: 'CHOAM Starport' },
-      Palace: { cost: 800, hp: 800, pProd: 0, pCons: 60, label: 'Palace' }
+      Palace: { cost: 800, hp: 800, pProd: 0, pCons: 60, label: 'Palace' },
+      AirDefense: { cost: 350, hp: 420, pProd: 0, pCons: 40, range: 8.0, dmg: 55, label: 'SAM Air Defense' },
+      FremenSietch: { cost: 0, hp: 600, pProd: 0, pCons: 0, label: 'Fremen Sietch' }
     };
 
     /* =========================================================================
@@ -851,6 +859,7 @@
     let sandworms = [];
     let particles = [];
     let floatingTexts = [];
+    let projectiles = []; // Physical Guided Rockets & Missiles
 
     generateSeamlessTextures();
 
@@ -879,6 +888,9 @@
             if (harDx >= 1 && harDx <= 8 && harDy >= 1 && harDy <= 9) return 'CONCRETE';
             return 'ROCK';
           }
+
+          // Deep Desert Fremen Sietch Mesas (Sietch Tabr & Sietch Chinrock)
+          if (Math.hypot(x - 18, y - 18) <= 2.2 || Math.hypot(x - 32, y - 8) <= 2.2) return 'ROCK';
 
           // --- 3. Mountain Ranges, Craters & Rocky Promontories ---
           if ((x === 24 && y <= 12) || (x === 33 && y >= 18)) return 'MOUNTAIN';
@@ -957,7 +969,12 @@
         { type: 'Palace', house: 'Harkonnen', x: W - 7, y: H - 9, hp: 800, maxHp: 800, pProd: 0, pCons: 60 },
         { type: 'GunTurret', house: 'Harkonnen', x: W - 9, y: H - 3, hp: 350, maxHp: 350, pProd: 0, pCons: 20, range: 4.5, dmg: 22 },
         { type: 'RocketTurret', house: 'Harkonnen', x: W - 9, y: H - 6, hp: 350, maxHp: 350, pProd: 0, pCons: 45, range: 6.5, dmg: 45 },
-        { type: 'GunTurret', house: 'Harkonnen', x: W - 9, y: H - 9, hp: 350, maxHp: 350, pProd: 0, pCons: 20, range: 4.5, dmg: 22 }
+        { type: 'GunTurret', house: 'Harkonnen', x: W - 9, y: H - 9, hp: 350, maxHp: 350, pProd: 0, pCons: 20, range: 4.5, dmg: 22 },
+        { type: 'AirDefense', house: 'Atreides', x: 8, y: 7, hp: 420, maxHp: 420, pProd: 0, pCons: 40, range: 8.0, dmg: 55 },
+        { type: 'AirDefense', house: 'Harkonnen', x: W - 9, y: H - 8, hp: 420, maxHp: 420, pProd: 0, pCons: 40, range: 8.0, dmg: 55 },
+        // Deep Desert Neutral Fremen Sietches
+        { type: 'FremenSietch', house: 'Fremen', name: 'Sietch Tabr', x: 18, y: 18, hp: 600, maxHp: 600, pProd: 0, pCons: 0, alliedWith: null },
+        { type: 'FremenSietch', house: 'Fremen', name: 'Sietch Chinrock', x: 32, y: 8, hp: 600, maxHp: 600, pProd: 0, pCons: 0, alliedWith: null }
       ];
 
       // Robust Starting Armies with Diverse Ground & Aviation Forces
@@ -1008,7 +1025,14 @@
         { type: 'LightInfantry', house: 'Harkonnen', x: W - 9.5, y: H - 8.0, tx: W - 13.5, ty: H - 9.0, hp: 60, maxHp: 60, spice: 0, maxSpice: 0, dmg: 10, range: 2.2, angle: Math.PI, turretAngle: Math.PI, speed: 1.2, turnSpeed: 4.0, repairing: false, airlifted: false, isAir: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
         // --- Harkonnen Aerial Fleet ---
         { type: 'Gunship', house: 'Harkonnen', x: W - 8.0, y: H - 6.0, tx: W - 16.0, ty: 12.0, hp: 160, maxHp: 160, spice: 0, maxSpice: 0, dmg: 35, range: 4.5, angle: Math.PI, turretAngle: Math.PI, speed: 3.5, turnSpeed: 3.8, repairing: false, airlifted: false, isAir: true, orbitAngle: 1.0, wingPhase: 0, wormPanic: false, retreatWarning: false, lastAttacker: null },
-        { type: 'Bomber', house: 'Harkonnen', x: W - 6.0, y: H - 4.0, tx: W - 18.0, ty: 12.0, hp: 200, maxHp: 200, spice: 0, maxSpice: 0, dmg: 60, range: 4.0, angle: Math.PI, turretAngle: Math.PI, speed: 3.8, turnSpeed: 3.2, repairing: false, airlifted: false, isAir: true, orbitAngle: 2.5, wingPhase: 0, wormPanic: false, retreatWarning: false, lastAttacker: null }
+        { type: 'Bomber', house: 'Harkonnen', x: W - 6.0, y: H - 4.0, tx: W - 18.0, ty: 12.0, hp: 200, maxHp: 200, spice: 0, maxSpice: 0, dmg: 60, range: 4.0, angle: Math.PI, turretAngle: Math.PI, speed: 3.8, turnSpeed: 3.2, repairing: false, airlifted: false, isAir: true, orbitAngle: 2.5, wingPhase: 0, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        // Elite Imperial Sardaukar & Specialized Modern Infantry
+        { type: 'Sardaukar', house: 'Harkonnen', x: W - 10.5, y: H - 7.5, tx: W - 13.5, ty: H - 7.5, hp: 220, maxHp: 220, dmg: 32, range: 3.8, speed: 1.8, turnSpeed: 3.2, angle: Math.PI, turretAngle: Math.PI, isAir: false, orbitAngle: 0, wingPhase: 0, repairing: false, airlifted: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'RocketTrooper', house: 'Atreides', x: 7.5, y: 4.5, tx: 10.5, ty: 4.5, hp: 90, maxHp: 90, dmg: 35, range: 5.5, speed: 1.3, turnSpeed: 3.2, angle: 0, turretAngle: 0, isAir: false, orbitAngle: 0, wingPhase: 0, repairing: false, airlifted: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        { type: 'Engineer', house: 'Atreides', x: 6.5, y: 3.5, tx: 8.5, ty: 3.5, hp: 50, maxHp: 50, dmg: 0, range: 1.0, speed: 1.2, turnSpeed: 3.2, angle: 0, turretAngle: 0, isAir: false, orbitAngle: 0, wingPhase: 0, repairing: false, airlifted: false, wormPanic: false, retreatWarning: false, lastAttacker: null },
+        // Deep Desert Neutral Fremen Warriors
+        { type: 'FremenWarrior', house: 'Fremen', x: 18.5, y: 19.5, tx: 18.5, ty: 19.5, hp: 160, maxHp: 160, dmg: 30, range: 4.0, speed: 2.2, turnSpeed: 3.5, angle: 0, turretAngle: 0, isAir: false, orbitAngle: 0, wingPhase: 0, repairing: false, airlifted: false, wormPanic: false, immuneWorm: true, retreatWarning: false, lastAttacker: null },
+        { type: 'FremenWarrior', house: 'Fremen', x: 32.5, y: 9.5, tx: 32.5, ty: 9.5, hp: 160, maxHp: 160, dmg: 30, range: 4.0, speed: 2.2, turnSpeed: 3.5, angle: Math.PI, turretAngle: Math.PI, isAir: false, orbitAngle: 0, wingPhase: 0, repairing: false, airlifted: false, wormPanic: false, immuneWorm: true, retreatWarning: false, lastAttacker: null }
       ];
 
       carryalls = [
@@ -1451,6 +1475,53 @@
       });
     }
 
+    function spawnRocket(startX, startY, targetX, targetY, targetEntity, dmg, house, color = '#f97316', isAntiAir = false) {
+      projectiles.push({
+        x: startX,
+        y: startY,
+        tx: targetX,
+        ty: targetY,
+        target: targetEntity,
+        dmg: dmg,
+        house: house,
+        speed: isAntiAir ? 8.5 : 6.0,
+        angle: Math.atan2(targetY - startY, targetX - startX),
+        color: color,
+        isAntiAir: isAntiAir,
+        life: 0,
+        maxLife: 3.5,
+        smokeTimer: 0
+      });
+    }
+
+    function addSmoke(x, y, radius = 2.5, color = '#cbd5e1') {
+      particles.push({
+        type: 'smoke',
+        x: x,
+        y: y,
+        vx: (Math.random() - 0.5) * 6 + 3,
+        vy: (Math.random() - 0.5) * 6 - 3,
+        radius: radius,
+        maxRadius: radius * 3.2,
+        life: 1.0,
+        maxLife: 0.65,
+        color: color
+      });
+    }
+
+    function addPlasmaBurst(x, y, color = '#c084fc') {
+      particles.push({
+        type: 'plasma',
+        x: x,
+        y: y,
+        radius: 3.5,
+        maxRadius: 18,
+        life: 1.0,
+        maxLife: 0.28,
+        color: color
+      });
+    }
+
     function updateParticles(dt) {
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
@@ -1464,6 +1535,12 @@
           p.y += p.vy;
         } else if (p.type === 'sonic') {
           p.radius += dt * 75;
+        } else if (p.type === 'smoke') {
+          p.x += p.vx * dt * 25;
+          p.y += p.vy * dt * 25;
+          p.radius += dt * 8.5;
+        } else if (p.type === 'plasma') {
+          p.radius += dt * 45;
         }
       }
     }
@@ -1510,6 +1587,9 @@
       const isInf = unitType === 'LightInfantry';
       const isEng = unitType === 'Engineer';
       const isSab = unitType === 'Saboteur';
+      const isSard = unitType === 'Sardaukar';
+      const isRocTroop = unitType === 'RocketTrooper';
+      const isFrem = unitType === 'FremenWarrior';
       const isOrni = unitType === 'Ornithopter';
       const isGunship = unitType === 'Gunship';
       const isBomber = unitType === 'Bomber';
@@ -1518,8 +1598,11 @@
 
       let hp = 100, dmg = 20, rng = 3.0, spd = 1.5;
       if (isInf) { hp = 60; dmg = 12; rng = 2.5; spd = 1.2; }
-      else if (isEng) { hp = 50; dmg = 0; rng = 1.0; spd = 1.1; }
+      else if (isEng) { hp = 50; dmg = 0; rng = 1.0; spd = 1.2; }
       else if (isSab) { hp = 45; dmg = 0; rng = 1.0; spd = 2.4; }
+      else if (isSard) { hp = 220; dmg = 32; rng = 3.8; spd = 1.8; }
+      else if (isRocTroop) { hp = 90; dmg = 35; rng = 5.5; spd = 1.3; }
+      else if (isFrem) { hp = 160; dmg = 30; rng = 4.0; spd = 2.2; }
       else if (isTrike) { hp = 90; dmg = 15; rng = 2.8; spd = 2.6; }
       else if (isQuad) { hp = 120; dmg = 20; rng = 3.2; spd = 2.1; }
       else if (isTank) { hp = 150; dmg = 28; rng = 4.0; spd = 1.6; }
@@ -1544,6 +1627,7 @@
         angle: house === 'Atreides' ? 0 : Math.PI, turretAngle: house === 'Atreides' ? 0 : Math.PI,
         isAir, orbitAngle: Math.random() * Math.PI * 2, wingPhase: 0,
         repairing: false, airlifted: false, wormPanic: false,
+        immuneWorm: isFrem,
         retreatWarning: false, lastAttacker: null
       };
       units.push(u);
@@ -1857,6 +1941,7 @@
       }
 
       updateGame(dt);
+      updateProjectiles(dt);
       updateParticles(dt);
       updateFloatingTexts(dt);
 
@@ -1868,6 +1953,7 @@
       renderUnits(now);
       renderCarryalls(now);
       renderSandworms(now);
+      renderProjectiles();
       renderParticles();
       renderFloatingTexts();
       renderMarqueeBox();
@@ -1941,18 +2027,36 @@
         }
       });
 
-      // Defensive Turrets Auto-Fire (Hostile Units & Encroaching Sandworms)
+      // Defensive Turrets & SAM Air Defense Auto-Fire
       buildings.forEach(b => {
-        if (b.hp > 0 && (b.type === 'GunTurret' || b.type === 'RocketTurret')) {
+        if (b.hp > 0 && (b.type === 'GunTurret' || b.type === 'RocketTurret' || b.type === 'AirDefense')) {
           const rng = b.range || 4.5;
           const dmg = b.dmg || 22;
-          const target = units.find(u => u.house !== b.house && u.hp > 0 && Math.hypot(u.x - (b.x + 0.5), u.y - (b.y + 0.5)) <= rng);
+
+          // SAM Air Defense Battery prioritizes hostile aviation squadrons
+          let target = null;
+          if (b.type === 'AirDefense') {
+            target = units.find(u => u.house !== b.house && u.hp > 0 && u.isAir && Math.hypot(u.x - (b.x + 0.5), u.y - (b.y + 0.5)) <= rng)
+              || units.find(u => u.house !== b.house && u.hp > 0 && Math.hypot(u.x - (b.x + 0.5), u.y - (b.y + 0.5)) <= 4.5);
+          } else {
+            target = units.find(u => u.house !== b.house && u.hp > 0 && Math.hypot(u.x - (b.x + 0.5), u.y - (b.y + 0.5)) <= rng);
+          }
+
           if (target) {
-            target.hp = Math.max(0, target.hp - dmg);
-            playSound(b.type === 'RocketTurret' ? 'rocket' : 'cannon');
-            addTracer((b.x + 0.5) * TILE, (b.y + 0.5) * TILE, target.x * TILE, target.y * TILE, '#ef4444');
-            addExplosion(target.x * TILE, target.y * TILE, 12);
-            addFloatingText(`-${dmg}`, target.x * TILE, target.y * TILE - 8, '#ef4444');
+            if (b.type === 'AirDefense') {
+              playSound('rocket');
+              spawnRocket(b.x + 0.5, b.y + 0.5, target.x, target.y, target, dmg, b.house, '#38bdf8', true);
+              addTracer((b.x + 0.5) * TILE, (b.y + 0.5) * TILE, target.x * TILE, target.y * TILE, '#38bdf8');
+            } else if (b.type === 'RocketTurret') {
+              playSound('rocket');
+              spawnRocket(b.x + 0.5, b.y + 0.5, target.x, target.y, target, dmg, b.house, '#f97316', target.isAir);
+            } else {
+              target.hp = Math.max(0, target.hp - dmg);
+              playSound('cannon');
+              addTracer((b.x + 0.5) * TILE, (b.y + 0.5) * TILE, target.x * TILE, target.y * TILE, '#ef4444');
+              addExplosion(target.x * TILE, target.y * TILE, 12);
+              addFloatingText(`-${dmg}`, target.x * TILE, target.y * TILE - 8, '#ef4444');
+            }
           } else {
             // Engage hostile Sandworm threatening the base perimeter
             const encroachingWorm = sandworms.find(w => !w.submerged && !w.dormant && w.hp > 0 && Math.hypot(w.x - (b.x + 0.5), w.y - (b.y + 0.5)) <= rng);
@@ -2070,8 +2174,14 @@
         trainUnit(Math.random() < 0.5 ? 'SiegeTank' : 'MissileTank', 450, house);
       } else if (cred >= 350 && hasBuilding(house, 'HighTech') && airCount < 4 && Math.random() < 0.45) {
         trainUnit(Math.random() < 0.6 ? 'Ornithopter' : 'Gunship', 350, house);
+      } else if (cred >= 300 && hasBuilding(house, 'Starport') && Math.random() < 0.4) {
+        trainUnit('Sardaukar', 300, house);
       } else if (cred >= 300 && hasBuilding(house, 'HeavyFactory')) {
         trainUnit('CombatTank', 300, house);
+      } else if (cred >= 180 && hasBuilding(house, 'Barracks') && Math.random() < 0.35) {
+        trainUnit('RocketTrooper', 180, house);
+      } else if (cred >= 200 && hasBuilding(house, 'Barracks') && Math.random() < 0.25) {
+        trainUnit('Engineer', 200, house);
       } else if (cred >= 150 && (hasBuilding(house, 'LightFactory') || hasBuilding(house, 'HeavyFactory')) && Math.random() < 0.3) {
         trainUnit(Math.random() < 0.5 ? 'Trike' : 'Quad', 150, house);
       }
@@ -2245,6 +2355,69 @@
             u.y = Math.max(0.4, Math.min(H - 0.4, u.y + Math.sin(u.angle) * moveStep));
           }
         } else {
+          // Advanced Independent Unit Behaviors
+          // A. Engineer Building Capture & Field Repairs
+          if (u.type === 'Engineer') {
+            const enemyB = buildings.find(b => b.house !== u.house && b.house !== 'Fremen' && b.hp > 0 && Math.hypot(b.x + 0.5 - u.x, b.y + 0.5 - u.y) <= 1.25);
+            if (enemyB) {
+              const prevOwner = enemyB.house;
+              enemyB.house = u.house;
+              enemyB.hp = Math.min(enemyB.maxHp, enemyB.hp + 100);
+              u.hp = 0; // consumed on capture
+              addSonicWave((enemyB.x + 0.5) * TILE, (enemyB.y + 0.5) * TILE, 48);
+              addFloatingText("CAPTURED!", (enemyB.x + 0.5) * TILE, enemyB.y * TILE - 14, '#22c55e');
+              playSound('build');
+              logMsg(`${u.house} Field Engineer successfully infiltrated and captured enemy ${enemyB.type} from ${prevOwner}! Structure reflagged to ${u.house}!`, 'combat');
+              updateUI();
+              return;
+            }
+
+            // Autonomous repairs of nearby damaged structures/vehicles
+            const damagedObj = buildings.find(b => b.house === u.house && b.hp < b.maxHp * 0.95 && Math.hypot(b.x + 0.5 - u.x, b.y + 0.5 - u.y) <= 3.5)
+              || units.find(f => f.house === u.house && !f.isAir && f !== u && f.hp < f.maxHp * 0.95 && Math.hypot(f.x - u.x, f.y - u.y) <= 3.5);
+            if (damagedObj) {
+              const ox = damagedObj.type in BUILDING_SPECS ? damagedObj.x + 0.5 : damagedObj.x;
+              const oy = damagedObj.type in BUILDING_SPECS ? damagedObj.y + 0.5 : damagedObj.y;
+              if (Math.hypot(ox - u.x, oy - u.y) <= 1.25) {
+                damagedObj.hp = Math.min(damagedObj.maxHp, damagedObj.hp + dt * 45);
+                addRepairSparks(u.x * TILE, u.y * TILE);
+              } else if (Math.hypot(u.tx - u.x, u.ty - u.y) < 0.2) {
+                u.tx = ox; u.ty = oy;
+              }
+            }
+          }
+
+          // B. Neutral Fremen Sietch Alliance Diplomatic Contact
+          if (u.house !== 'Fremen') {
+            const sietch = buildings.find(b => b.type === 'FremenSietch' && b.house === 'Fremen' && Math.hypot(b.x + 0.5 - u.x, b.y + 0.5 - u.y) <= 2.2);
+            if (sietch) {
+              sietch.house = u.house;
+              sietch.alliedWith = u.house;
+              credits[u.house] = (credits[u.house] || 0) + 250;
+              // Rally nearby Fremen warriors to ally house
+              units.forEach(w => {
+                if (w.house === 'Fremen' && Math.hypot(w.x - sietch.x, w.y - sietch.y) <= 6.0) {
+                  w.house = u.house;
+                  addFloatingText("ALLIED!", w.x * TILE, w.y * TILE - 12, '#eab308');
+                }
+              });
+              addFloatingText("SIETCH ALLIED!", (sietch.x + 0.5) * TILE, sietch.y * TILE - 16, '#eab308');
+              playSound('harvest');
+              logMsg(`Deep desert diplomatic victory: ${sietch.name} has allied with ${u.house}! Fedaykin warriors rally to your command (+250 Spice)!`, 'sys');
+              updateUI();
+            }
+          }
+
+          // C. Tactical Kiting for Long-Range Infantry & Missile Tanks
+          if (u.type === 'RocketTrooper' || u.type === 'MissileTank' || u.type === 'Sardaukar') {
+            const threateningEnemy = units.find(e => e.house !== u.house && e.hp > 0 && Math.hypot(e.x - u.x, e.y - u.y) <= 2.2);
+            if (threateningEnemy && !u.repairing) {
+              const awayAngle = Math.atan2(u.y - threateningEnemy.y, u.x - threateningEnemy.x);
+              u.tx = Math.max(1, Math.min(W - 2, u.x + Math.cos(awayAngle) * 2.0));
+              u.ty = Math.max(1, Math.min(H - 2, u.y + Math.sin(awayAngle) * 2.0));
+            }
+          }
+
           // Ground Unit Movement
           const dist = Math.hypot(u.tx - u.x, u.ty - u.y);
           if (dist > 0.08) {
@@ -2278,10 +2451,18 @@
             } else if (u.type === 'SonicTank') {
               playSound('sonic');
               addSonicWave(u.x * TILE, u.y * TILE, 36);
-            } else if (u.type === 'Gunship' || u.type === 'MissileTank') {
+            } else if (u.type === 'MissileTank' || u.type === 'RocketTrooper') {
+              // Real physical rocket projectile with smoke trail
               playSound('rocket');
-              addTracer(u.x * TILE, u.y * TILE, enemy.x * TILE, enemy.y * TILE, '#38bdf8');
-              addExplosion(enemy.x * TILE, enemy.y * TILE, 16);
+              spawnRocket(u.x, u.y, enemy.x, enemy.y, enemy, u.dmg, u.house, '#f97316', enemy.isAir);
+            } else if (u.type === 'Sardaukar') {
+              // Dual Heavy Imperial Plasma Blasters
+              playSound('cannon');
+              addPlasmaBurst(enemy.x * TILE, enemy.y * TILE, '#c084fc');
+              addTracer(u.x * TILE, u.y * TILE, enemy.x * TILE, enemy.y * TILE, '#c084fc');
+            } else if (u.type === 'Gunship') {
+              playSound('rocket');
+              spawnRocket(u.x, u.y, enemy.x, enemy.y, enemy, u.dmg, u.house, '#38bdf8', enemy.isAir);
             } else {
               playSound('cannon');
               addTracer(u.x * TILE, u.y * TILE, enemy.x * TILE, enemy.y * TILE);
@@ -2507,6 +2688,8 @@
               const uTile = (tiles[ty] && tiles[ty][tx]) || 'SAND';
               // Units on bedrock (ROCK, CONCRETE, MOUNTAIN, CRATER) are completely undetectable and safe!
               if (uTile === 'ROCK' || uTile === 'CONCRETE' || uTile === 'MOUNTAIN' || uTile === 'CRATER') return;
+              // Deep desert Fremen have mastered Sandworm riding and desert rhythm; Shai-Hulud ignores them
+              if (u.house === 'Fremen' || u.immuneWorm) return;
 
               // Sandworms sense seismic vibrations through sand, not omniscient sight:
               const isMoving = Math.hypot(u.tx - u.x, u.ty - u.y) > 0.15;
@@ -2607,8 +2790,8 @@
               if (w.trail.length > 36) w.trail.shift();
             }
 
-            // Devour target only if target is not on rock/concrete
-            if (target && Math.hypot(target.x - w.x, target.y - w.y) < 0.6) {
+            // Devour target only if target is not on rock/concrete and not Fremen
+            if (target && target.house !== 'Fremen' && !target.immuneWorm && Math.hypot(target.x - w.x, target.y - w.y) < 0.6) {
               const targetTile = (tiles[Math.floor(target.y)] && tiles[Math.floor(target.y)][Math.floor(target.x)]) || 'SAND';
               if (targetTile !== 'ROCK' && targetTile !== 'CONCRETE') {
                 target.hp = 0;
@@ -2926,6 +3109,51 @@
           ctx.fillStyle = houseCol.light;
           ctx.fillRect(px + 11, py + 12, 6, 12);
 
+        } else if (b.type === 'AirDefense') {
+          // Reinforced SAM Air Defense Battery
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(px + 3, py + 3, TILE - 6, TILE - 6);
+          ctx.fillStyle = houseCol.main;
+          ctx.beginPath();
+          ctx.arc(px + 14, py + 14, 7, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Dual SAM Missile Rails
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillRect(px + 10, py + 8, 3, 11);
+          ctx.fillRect(px + 15, py + 8, 3, 11);
+
+          // Rotating Tactical Radar Dome
+          const radarA = animTime * 0.005;
+          ctx.save();
+          ctx.translate(px + 14, py + 14);
+          ctx.rotate(radarA);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(0, 0); ctx.lineTo(0, -6);
+          ctx.stroke();
+          ctx.restore();
+
+        } else if (b.type === 'FremenSietch') {
+          // Ancient Deep Desert Sietch Rock Arch Cavern
+          ctx.fillStyle = '#78350f';
+          ctx.beginPath();
+          ctx.arc(px + 14, py + 14, 11, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Cavern Shadow Depth
+          ctx.fillStyle = '#1c1917';
+          ctx.beginPath();
+          ctx.ellipse(px + 14, py + 15, 6, 4.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Tribal Spice Embers Glow
+          ctx.fillStyle = '#f59e0b';
+          ctx.beginPath();
+          ctx.arc(px + 14, py + 15, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+
         } else {
           ctx.fillStyle = houseCol.dark;
           ctx.fillRect(px + 3, py + 3, TILE - 6, TILE - 6);
@@ -3188,8 +3416,83 @@
             ctx.lineWidth = 1.2;
             ctx.stroke();
 
+          } else if (u.type === 'Sardaukar') {
+            // Imperial Sardaukar Dread Shock Trooper
+            ctx.fillStyle = '#6b21a8';
+            ctx.beginPath();
+            ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Golden Imperial Trim
+            ctx.strokeStyle = '#facc15';
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+
+            // Crimson Cybernetic Visor Slit
+            ctx.fillStyle = '#ef4444';
+            ctx.fillRect(1, -1.2, 3, 2.4);
+
+            // Dual Heavy Plasma Barrels
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillRect(3, -2.5, 5, 1.8);
+            ctx.fillRect(3, 0.8, 5, 1.8);
+
+          } else if (u.type === 'RocketTrooper') {
+            // Heavy Rocket Trooper with Shoulder Launcher
+            ctx.fillStyle = col.main;
+            ctx.beginPath();
+            ctx.arc(0, 0, 4.8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Shoulder Launcher Tube
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(-2, -3.8, 8, 3.2);
+
+            // Laser Sight Dot
+            ctx.fillStyle = '#22c55e';
+            ctx.beginPath();
+            ctx.arc(6, -2.2, 1.0, 0, Math.PI * 2);
+            ctx.fill();
+
+          } else if (u.type === 'Engineer') {
+            // Tech Field Engineer with Welding Torch
+            ctx.fillStyle = '#f59e0b';
+            ctx.beginPath();
+            ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Hazard Stripes & Backpack
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(-4, -2.5, 3, 5);
+
+            // Tool Torch
+            ctx.fillStyle = '#38bdf8';
+            ctx.fillRect(2, -1, 3.5, 2);
+
+          } else if (u.type === 'FremenWarrior') {
+            // Fremen Fedaykin with Desert Stillsuit Robe
+            ctx.fillStyle = '#ca8a04';
+            ctx.beginPath();
+            ctx.arc(0, 0, 4.8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Flowing Desert Cowl
+            ctx.fillStyle = '#78350f';
+            ctx.fillRect(-3, -2, 4, 4);
+
+            // Glowing Blue-within-Blue Eyes of Ibad
+            ctx.fillStyle = '#0284c7';
+            ctx.fillRect(1.5, -1, 2, 2);
+
+            // Silver Crysknife Blade
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(3, 1); ctx.lineTo(6.5, 2.5);
+            ctx.stroke();
+
           } else {
-            // Infantry / Trooper
+            // Light Infantry / Trooper
             ctx.fillStyle = col.main;
             ctx.beginPath();
             ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
@@ -3419,10 +3722,120 @@
       });
     }
 
+    function updateProjectiles(dt) {
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        p.life += dt;
+        if (p.life >= p.maxLife) {
+          projectiles.splice(i, 1);
+          continue;
+        }
+
+        if (p.target && p.target.hp > 0) {
+          p.tx = p.target.x;
+          p.ty = p.target.y;
+        }
+
+        const dx = p.tx - p.x;
+        const dy = p.ty - p.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist <= 0.45) {
+          // Impact detonation
+          if (p.target && p.target.hp > 0) {
+            p.target.hp = Math.max(0, p.target.hp - p.dmg);
+            addFloatingText(`-${p.dmg}`, p.target.x * TILE, p.target.y * TILE - 12, '#ef4444');
+          }
+          addExplosion(p.tx * TILE, p.ty * TILE, p.isAntiAir ? 28 : 22);
+          playSound('rocket');
+
+          // Splash damage to enemy ground units in blast radius
+          units.forEach(u => {
+            if (u !== p.target && u.house !== p.house && u.hp > 0 && !u.isAir) {
+              const splashDist = Math.hypot(u.x - p.tx, u.y - p.ty);
+              if (splashDist < 1.2) {
+                const splashDmg = Math.round(p.dmg * 0.35);
+                u.hp = Math.max(0, u.hp - splashDmg);
+                addFloatingText(`-${splashDmg}`, u.x * TILE, u.y * TILE - 8, '#f97316');
+              }
+            }
+          });
+
+          projectiles.splice(i, 1);
+          continue;
+        }
+
+        // Homing and propulsion kinematics
+        const desiredAngle = Math.atan2(dy, dx);
+        p.angle = smoothTurn(p.angle, desiredAngle, 8.0 * dt);
+        const step = Math.min(dist, p.speed * dt);
+        p.x += Math.cos(p.angle) * step;
+        p.y += Math.sin(p.angle) * step;
+
+        // Trailing exhaust smoke puffs
+        p.smokeTimer += dt;
+        if (p.smokeTimer >= 0.035) {
+          p.smokeTimer = 0;
+          addSmoke(p.x * TILE, p.y * TILE, 2.5, '#e2e8f0');
+        }
+      }
+    }
+
+    function renderProjectiles() {
+      projectiles.forEach(p => {
+        const px = p.x * TILE, py = p.y * TILE;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(p.angle);
+
+        // Rocket Body
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(-7, -2, 12, 4);
+
+        // Warhead Nosecone
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.moveTo(5, -2);
+        ctx.lineTo(9, 0);
+        ctx.lineTo(5, 2);
+        ctx.closePath();
+        ctx.fill();
+
+        // Tail Fins
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(-7, -4, 2, 2);
+        ctx.fillRect(-7, 2, 2, 2);
+
+        // Rocket Exhaust Flame Glow
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath();
+        ctx.moveTo(-7, -1.5);
+        ctx.lineTo(-12 - Math.random() * 4, 0);
+        ctx.lineTo(-7, 1.5);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+      });
+    }
+
     function renderParticles() {
       particles.forEach(p => {
         const alpha = p.life;
-        if (p.type === 'spark') {
+        if (p.type === 'smoke') {
+          ctx.fillStyle = `rgba(226, 232, 240, ${alpha * 0.45})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius || 3, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (p.type === 'plasma') {
+          ctx.strokeStyle = p.color || '#c084fc';
+          ctx.lineWidth = 2.0;
+          ctx.globalAlpha = alpha;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius || 6, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1.0;
+        } else if (p.type === 'spark') {
           ctx.fillStyle = p.color;
           ctx.globalAlpha = alpha;
           ctx.beginPath();

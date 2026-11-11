@@ -14,9 +14,29 @@ SPICE_THICK = "SPICE_THICK"
 
 HOUSES = ("Atreides", "Harkonnen", "Ordos")
 
-UNIT_COSTS: Dict[str, int] = {"Trike": 150, "CombatTank": 300, "Harvester": 400, "Engineer": 200, "Saboteur": 250}
+UNIT_COSTS: Dict[str, int] = {
+    "Trike": 150,
+    "CombatTank": 300,
+    "Harvester": 400,
+    "Engineer": 200,
+    "Saboteur": 250,
+    "RocketTrooper": 180,
+    "Sardaukar": 300,
+    "FremenWarrior": 220,
+}
 
-BUILDING_COSTS: Dict[str, int] = {"WindTrap": 200, "Refinery": 400, "Barracks": 250, "Silo": 150, "Starport": 500, "Palace": 600, "GunTurret": 250, "RocketTurret": 350}
+BUILDING_COSTS: Dict[str, int] = {
+    "WindTrap": 200,
+    "Refinery": 400,
+    "Barracks": 250,
+    "Silo": 150,
+    "Starport": 500,
+    "Palace": 600,
+    "GunTurret": 250,
+    "RocketTurret": 350,
+    "AirDefense": 350,
+    "FremenSietch": 500,
+}
 
 # Signature special vehicle of each Great House (spawned via GameState.spawn_special_unit).
 HOUSE_SPECIAL_UNITS: Dict[str, Dict] = {
