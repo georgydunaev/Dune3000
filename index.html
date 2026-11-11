@@ -479,6 +479,51 @@
     let audioCtx = null;
     let soundEnabled = true;
 
+    /* =========================================================================
+       SANDWORM DAMAGE & DEATH SYSTEM (Shai-Hulud Can Die)
+       ========================================================================= */
+    let wormRespawnTimer = 0;
+
+    function damageSandworm(w, dmg, attackerHouse = 'Atreides') {
+      if (!w || w.hp <= 0 || w.submerged) return;
+      w.hp = Math.max(0, w.hp - dmg);
+      addFloatingText(`-${dmg}`, w.x * TILE, w.y * TILE - 10, '#f97316');
+
+      if (w.hp <= 0) {
+        // === SHAI-HULUD HAS BEEN SLAIN ===
+        playSound('bomb');
+        for (let k = 0; k < 8; k++) {
+          const ex = w.x * TILE + (Math.random() - 0.5) * 44;
+          const ey = w.y * TILE + (Math.random() - 0.5) * 44;
+          addExplosion(ex, ey, 36);
+        }
+        addFloatingText("SHAI-HULUD HAS FALLEN!", w.x * TILE, w.y * TILE - 24, '#ef4444');
+        addFloatingText("+2500 Spice Blow!", w.x * TILE, w.y * TILE - 8, '#facc15');
+        logMsg("TITAN FALL: SHAI-HULUD HAS BEEN SLAIN! A catastrophic Spice Blow erupts across the desert!", "combat");
+
+        // Death of a Sandworm triggers a massive 5x5 rich spice deposit!
+        const deadGX = Math.floor(w.x);
+        const deadGY = Math.floor(w.y);
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            const ny = deadGY + dy, nx = deadGX + dx;
+            if (tiles[ny] && tiles[ny][nx] !== 'ROCK' && tiles[ny][nx] !== 'CONCRETE' && tiles[ny][nx] !== 'MOUNTAIN') {
+              tiles[ny][nx] = (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) ? 'SPICE_THICK' : 'SPICE_THIN';
+            }
+          }
+        }
+        if (credits[attackerHouse] !== undefined) {
+          credits[attackerHouse] = Math.min(maxCapacity(attackerHouse), credits[attackerHouse] + 1500);
+        }
+        sandworms = sandworms.filter(sw => sw !== w);
+      } else if (w.hp <= w.lastBurrowHp - 200 && !w.submerged) {
+        w.submerged = true;
+        w.submergeTimer = 14;
+        w.lastBurrowHp = w.hp;
+        logMsg("Shai-Hulud took critical damage and burrowed into deep subterranean sands!", "worm");
+      }
+    }
+
     function initAudio() {
       if (!audioCtx && AudioContextClass) {
         audioCtx = new AudioContextClass();
@@ -812,43 +857,48 @@
     function initMap() {
       tiles = Array.from({ length: H }, (_, y) =>
         Array.from({ length: W }, (_, x) => {
-          // Atreides Base Plateau (all starting structures paved on CONCRETE)
-          if (x <= 10 && y <= 11) {
-            if (x >= 1 && x <= 10 && y >= 1 && y <= 11) return 'CONCRETE';
-            return 'ROCK';
-          }
-          // Harkonnen Base Plateau
-          if (x >= W - 12 && y >= H - 12) {
-            if (x >= W - 11 && x <= W - 2 && y >= H - 11 && y <= H - 2) return 'CONCRETE';
+          // --- 1. Natural Organic Atreides Rocky Citadel Plateau ---
+          // Natural curved geological mesa using harmonic sinusoidal contouring
+          const atrRadius = Math.hypot(x * 0.95, y * 1.05);
+          const atrNoise = Math.sin(x * 0.6) * 1.6 + Math.cos(y * 0.5) * 1.8 + Math.sin((x + y) * 0.35) * 1.4;
+          if (atrRadius <= 15.5 + atrNoise) {
+            // Prepared concrete construction sites under primary infrastructure
+            if (x >= 1 && x <= 8 && y >= 1 && y <= 9) return 'CONCRETE';
             return 'ROCK';
           }
 
-          // Mountain Ranges & Craters
+          // --- 2. Natural Organic Harkonnen Rocky Stronghold Plateau ---
+          const harDx = W - 1 - x;
+          const harDy = H - 1 - y;
+          const harRadius = Math.hypot(harDx * 0.95, harDy * 1.05);
+          const harNoise = Math.sin(harDx * 0.6) * 1.6 + Math.cos(harDy * 0.5) * 1.8 + Math.sin((harDx + harDy) * 0.35) * 1.4;
+          if (harRadius <= 15.5 + harNoise) {
+            if (harDx >= 1 && harDx <= 8 && harDy >= 1 && harDy <= 9) return 'CONCRETE';
+            return 'ROCK';
+          }
+
+          // --- 3. Mountain Ranges, Craters & Rocky Promontories ---
           if ((x === 24 && y <= 12) || (x === 33 && y >= 18)) return 'MOUNTAIN';
           if (Math.hypot(x - 14, y - 6) < 2.4 || Math.hypot(x - 42, y - 24) < 2.4) return 'CRATER';
           if (Math.hypot(x - 12, y - 22) < 2.2 || Math.hypot(x - 44, y - 8) < 2.2) return 'ROCK';
 
-          // 1. Central Grand Spice Basin
+          // --- 4. Grand Melange Spice Basins ---
           const dCenter = Math.hypot(x - 27, y - 15);
           if (dCenter < 3.2) return 'SPICE_THICK';
           if (dCenter < 5.4) return 'SPICE_THIN';
 
-          // 2. Northwest Rich Spice Field
           const dNW = Math.hypot(x - 18, y - 9);
           if (dNW < 2.0) return 'SPICE_THICK';
           if (dNW < 3.6) return 'SPICE_THIN';
 
-          // 3. Southwest Spice Field
           const dSW = Math.hypot(x - 16, y - 23);
           if (dSW < 2.0) return 'SPICE_THICK';
           if (dSW < 3.6) return 'SPICE_THIN';
 
-          // 4. Northeast Spice Field
           const dNE = Math.hypot(x - 36, y - 8);
           if (dNE < 2.0) return 'SPICE_THICK';
           if (dNE < 3.6) return 'SPICE_THIN';
 
-          // 5. Southeast Spice Field
           const dSE = Math.hypot(x - 38, y - 22);
           if (dSE < 2.0) return 'SPICE_THICK';
           if (dSE < 3.6) return 'SPICE_THIN';
@@ -999,6 +1049,31 @@
       }
 
       logMsg(`Mission initialized on ${difficulty.toUpperCase()} difficulty. 48x27 Widescreen Battlefield active.`, 'sys');
+      // Sandworm Ecology Respawn (New Titan stirs in distant deep sands)
+      if (sandworms.length === 0) {
+        wormRespawnTimer = (wormRespawnTimer || 0) + 1;
+        if (wormRespawnTimer > 60) {
+          wormRespawnTimer = 0;
+          sandworms.push({
+            x: 27, y: 15, tx: 27, ty: 15, angle: 0, hp: 600, maxHp: 600,
+            stamina: 100, submerged: false, dormant: false, patrolTimer: 0,
+            baseSpeed: 1.7, speed: 1.7, wavePhase: 0, lastBurrowHp: 600,
+            submergeTimer: 0, dormantTimer: 0,
+            segments: [
+              { x: 26.5, y: 15, waveOffset: 0 },
+              { x: 26.0, y: 15, waveOffset: 0 },
+              { x: 25.5, y: 15, waveOffset: 0 },
+              { x: 25.0, y: 15, waveOffset: 0 },
+              { x: 24.5, y: 15, waveOffset: 0 },
+              { x: 24.0, y: 15, waveOffset: 0 }
+            ],
+            trail: []
+          });
+          playSound('worm');
+          logMsg("SEISMIC WARNING: A new Shai-Hulud has awakened from the deep sands!", "worm");
+        }
+      }
+
       // Subterranean Spice Bloom Tremor Eruption (Dynamic Economic Hotspot)
       if (Math.random() < 0.04) {
         const bx = Math.floor(14 + Math.random() * (W - 28));
@@ -1656,7 +1731,7 @@
         }
       } else if (mode === 'DeathHand') {
         playSound('cannon');
-        addExplosion(gx * TILE + 14, gy * TILE + 14, 45);
+        addExplosion(gx * TILE + 14, gy * TILE + 14, 48);
         units.forEach(u => {
           if (u.house !== 'Atreides' && u.hp > 0) {
             const d = Math.hypot(u.x - gx, u.y - gy);
@@ -1669,6 +1744,12 @@
             const d = Math.hypot(b.x - gx, b.y - gy);
             if (d < 1.0) b.hp = Math.max(0, b.hp - 150);
             else if (d < 2.2) b.hp = Math.max(0, b.hp - 75);
+          }
+        });
+        sandworms.forEach(w => {
+          if (w.hp > 0) {
+            const d = Math.hypot(w.x - gx, w.y - gy);
+            if (d < 2.5) damageSandworm(w, 350, 'Atreides');
           }
         });
         logMsg(`Palace Superweapon Death Hand struck sector (${gx}, ${gy})!`, 'combat');
@@ -1832,7 +1913,7 @@
         }
       });
 
-      // Defensive Turrets Auto-Fire
+      // Defensive Turrets Auto-Fire (Hostile Units & Encroaching Sandworms)
       buildings.forEach(b => {
         if (b.hp > 0 && (b.type === 'GunTurret' || b.type === 'RocketTurret')) {
           const rng = b.range || 4.5;
@@ -1843,6 +1924,16 @@
             playSound(b.type === 'RocketTurret' ? 'rocket' : 'cannon');
             addTracer((b.x + 0.5) * TILE, (b.y + 0.5) * TILE, target.x * TILE, target.y * TILE, '#ef4444');
             addExplosion(target.x * TILE, target.y * TILE, 12);
+            addFloatingText(`-${dmg}`, target.x * TILE, target.y * TILE - 8, '#ef4444');
+          } else {
+            // Engage hostile Sandworm threatening the base perimeter
+            const encroachingWorm = sandworms.find(w => !w.submerged && !w.dormant && w.hp > 0 && Math.hypot(w.x - (b.x + 0.5), w.y - (b.y + 0.5)) <= rng);
+            if (encroachingWorm) {
+              playSound(b.type === 'RocketTurret' ? 'rocket' : 'cannon');
+              addTracer((b.x + 0.5) * TILE, (b.y + 0.5) * TILE, encroachingWorm.x * TILE, encroachingWorm.y * TILE, '#facc15');
+              addExplosion(encroachingWorm.x * TILE, encroachingWorm.y * TILE, 14);
+              damageSandworm(encroachingWorm, dmg, b.house);
+            }
           }
         }
       });
@@ -1989,19 +2080,11 @@
             // Priority 2: Nearby Sandworm threatening units
             const nearbyWorm = sandworms.find(w => !w.submerged && !w.dormant && w.hp > 0 && Math.hypot(w.x - u.x, w.y - u.y) <= u.range);
             if (nearbyWorm && Math.random() < dt * 1.5) {
-              nearbyWorm.hp = Math.max(0, nearbyWorm.hp - u.dmg);
               u.turretAngle = Math.atan2(nearbyWorm.y - u.y, nearbyWorm.x - u.x);
               playSound('cannon');
               addTracer(u.x * TILE, u.y * TILE, nearbyWorm.x * TILE, nearbyWorm.y * TILE, '#f59e0b');
               addExplosion(nearbyWorm.x * TILE, nearbyWorm.y * TILE, 14);
-
-              // Worm dives if badly injured (loses 1/3 HP threshold)
-              if (nearbyWorm.hp <= nearbyWorm.lastBurrowHp - 200 && !nearbyWorm.submerged) {
-                nearbyWorm.submerged = true;
-                nearbyWorm.submergeTimer = 12;
-                nearbyWorm.lastBurrowHp = nearbyWorm.hp;
-                logMsg("Shai-Hulud took heavy ordnance fire and burrowed into deep subterranean sands!", "worm");
-              }
+              damageSandworm(nearbyWorm, u.dmg, u.house);
             } else {
               // Priority 3: Enemy building in range
               const enemyB = buildings.find(b => b.house !== u.house && b.hp > 0 && Math.hypot(b.x + 0.5 - u.x, b.y + 0.5 - u.y) <= u.range);
