@@ -1,6 +1,6 @@
 # Ticket 10: Implement Unit Production Catalog and `GameState.train_unit`
 
-**State:** open
+**State:** closed
 **Priority:** high
 
 ## Description

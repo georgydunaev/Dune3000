@@ -487,5 +487,59 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertEqual(dmg6, 5)
         self.assertEqual(target6.hp, 95)
 
+    def test_train_unit(self):
+        """test_train_unit: successful training with credit deduction and unit creation,
+        and insufficient credits returning None."""
+        # Test 1: Successful training - Trike costs 150
+        gs = GameState(GridMap(8, 8))
+        result = gs.train_unit("Atreides", "Trike", 3, 3)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.unit_type, "Trike")
+        self.assertEqual(result.house, "Atreides")
+        self.assertEqual(result.x, 3)
+        self.assertEqual(result.y, 3)
+        self.assertIn(result, gs.units)
+        self.assertEqual(gs.credits["Atreides"], 850)  # 1000 - 150
+
+        # Test 2: Successful training - CombatTank costs 300
+        gs2 = GameState(GridMap(8, 8))
+        result2 = gs2.train_unit("Harkonnen", "CombatTank", 5, 5)
+        self.assertIsNotNone(result2)
+        self.assertEqual(result2.unit_type, "CombatTank")
+        self.assertEqual(result2.house, "Harkonnen")
+        self.assertEqual(result2.x, 5)
+        self.assertEqual(result2.y, 5)
+        self.assertIn(result2, gs2.units)
+        self.assertEqual(gs2.credits["Harkonnen"], 700)  # 1000 - 300
+
+        # Test 3: Successful training - Harvester costs 400
+        gs3 = GameState(GridMap(8, 8))
+        result3 = gs3.train_unit("Ordos", "Harvester", 2, 2)
+        self.assertIsNotNone(result3)
+        self.assertEqual(result3.unit_type, "Harvester")
+        self.assertEqual(result3.house, "Ordos")
+        self.assertEqual(result3.x, 2)
+        self.assertEqual(result3.y, 2)
+        self.assertIn(result3, gs3.units)
+        self.assertEqual(gs3.credits["Ordos"], 600)  # 1000 - 400
+
+        # Test 4: Insufficient credits returns None
+        gs4 = GameState(GridMap(8, 8))
+        result4 = gs4.train_unit("Atreides", "CombatTank", 1, 1)  # costs 300, but credits = 1000 initially
+        # Actually with 1000 credits this should succeed, let's test with a unit type that costs more than 1000
+        # or test with insufficient initial credits by modifying credits first
+        # Let's test with a custom credit situation
+        gs4 = GameState(GridMap(8, 8))
+        gs4.credits["Atreides"] = 100  # set low credits
+        result4 = gs4.train_unit("Atreides", "CombatTank", 1, 1)  # costs 300
+        self.assertIsNone(result4)
+        self.assertEqual(gs4.credits["Atreides"], 100)  # credits should remain unchanged
+
+        # Test 5: Unknown unit type defaults to cost 200
+        gs5 = GameState(GridMap(8, 8))
+        result5 = gs5.train_unit("Atreides", "UnknownUnit", 1, 1)
+        self.assertIsNotNone(result5)  # 1000 >= 200
+        self.assertEqual(gs5.credits["Atreides"], 800)  # 1000 - 200
+
 if __name__ == "__main__":
     unittest.main()

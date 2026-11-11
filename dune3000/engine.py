@@ -14,6 +14,8 @@ SPICE_THICK = "SPICE_THICK"
 
 HOUSES = ("Atreides", "Harkonnen", "Ordos")
 
+UNIT_COSTS: Dict[str, int] = {"Trike": 150, "CombatTank": 300, "Harvester": 400}
+
 
 @dataclass
 class Building:
@@ -250,6 +252,15 @@ class GameState:
             building.hp = max(1, building.max_hp // 2)
         self.buildings.append(building)
         return building
+
+    def train_unit(self, house: str, unit_type: str, x: int, y: int) -> Optional[Unit]:
+        cost = UNIT_COSTS.get(unit_type, 200)
+        if self.credits.get(house, 0) < cost:
+            return None
+        self.credits[house] -= cost
+        unit = Unit(unit_type=unit_type, house=house, x=x, y=y)
+        self.units.append(unit)
+        return unit
 
 
 def compute_damage(weapon_type: str, armor_type: str, base_damage: int) -> int:
