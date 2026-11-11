@@ -556,7 +556,88 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertEqual(dmg6, 5)
         self.assertEqual(target6.hp, 95)
 
-    def test_train_unit(self):
+    def test_unit_xp_from_attack(self):
+        """test_unit_xp_from_attack: verify XP gain from combat, HP decrease, and rank promotion.
+
+        - When a unit damages an enemy target, its xp increases by the amount of damage dealt.
+        - When a unit damages an enemy target, the target's hp decreases and the attacker's xp increases accordingly.
+        - XP gain is 0 when the attack misses (target out of range or attacker/target dead).
+        - XP gain works correctly with the existing rank promotion thresholds (rank 1 at xp >= 100, rank 2 at xp >= 250).
+        """
+        # Test 1: In-range attack grants XP equal to damage dealt
+        gs = GameState(GridMap(8, 8))
+        attacker = Unit("CombatUnit", "Atreides", 1, 1, hp=50)
+        target = Unit("TargetUnit", "Harkonnen", 1, 2, hp=50)
+        gs.units.append(attacker)
+        gs.units.append(target)
+        dmg = attacker.attack(target)
+        self.assertEqual(dmg, 5)  # compute_damage("bullet", "heavy", 20) = 5
+        self.assertEqual(target.hp, 45)  # 50 - 5 = 45
+        self.assertEqual(attacker.xp, 5)  # gained 5 XP equal to damage
+
+        # Test 2: XP gain works correctly with rank promotion thresholds
+        gs2 = GameState(GridMap(8, 8))
+        attacker2 = Unit("CombatUnit", "Atreides", 1, 1, hp=50, xp=90)
+        target2 = Unit("TargetUnit", "Harkonnen", 1, 2, hp=50)
+        gs2.units.append(attacker2)
+        gs2.units.append(target2)
+        # Attack 5 damage: xp goes from 90 to 95 (still rank 0)
+        dmg2 = attacker2.attack(target2)
+        self.assertEqual(dmg2, 5)
+        self.assertEqual(attacker2.xp, 95)
+        self.assertEqual(attacker2.rank, 0)  # still rank 0, need 5 more XP for rank 1
+
+        # Three more attacks of 5 dmg each = 15 XP, total 95 + 15 = 110 >= 100 => rank 1
+        for _ in range(3):
+            dmg2 = attacker2.attack(target2)
+            self.assertEqual(dmg2, 5)
+        self.assertEqual(attacker2.xp, 110)
+        self.assertEqual(attacker2.rank, 1)  # promoted to rank 1
+        self.assertEqual(attacker2.attack_damage, 25)  # base 20 + 5 from rank 1
+
+        # Test 3: XP gain is 0 when attack misses (target out of range)
+        gs3 = GameState(GridMap(8, 8))
+        attacker3 = Unit("Sniper", "Atreides", 1, 1, hp=50, attack_range=3)
+        target3 = Unit("TargetUnit", "Harkonnen", 5, 1, hp=50)  # dist = 4, > range 3
+        gs3.units.append(attacker3)
+        gs3.units.append(target3)
+        dmg3 = attacker3.attack(target3)
+        self.assertEqual(dmg3, 0)
+        self.assertEqual(attacker3.xp, 0)  # no XP gained on miss
+
+        # Test 4: XP gain is 0 when attacker is dead
+        gs4 = GameState(GridMap(8, 8))
+        attacker4 = Unit("CombatUnit", "Atreides", 1, 1, hp=0)  # dead
+        target4 = Unit("TargetUnit", "Harkonnen", 1, 2, hp=50)
+        gs4.units.append(attacker4)
+        gs4.units.append(target4)
+        dmg4 = attacker4.attack(target4)
+        self.assertEqual(dmg4, 0)
+        self.assertEqual(attacker4.xp, 0)  # no XP gained when dead
+
+        # Test 5: XP gain is 0 when target is dead
+        gs5 = GameState(GridMap(8, 8))
+        attacker5 = Unit("CombatUnit", "Atreides", 1, 1, hp=50)
+        target5 = Unit("TargetUnit", "Harkonnen", 1, 2, hp=0)  # dead
+        gs5.units.append(attacker5)
+        gs5.units.append(target5)
+        dmg5 = attacker5.attack(target5)
+        self.assertEqual(dmg5, 0)
+        self.assertEqual(attacker5.xp, 0)  # no XP gained when target dead
+
+        # Test 6: Rank promotion to rank 2 at xp >= 250
+        gs6 = GameState(GridMap(8, 8))
+        attacker6 = Unit("CombatUnit", "Atreides", 1, 1, hp=50, xp=200)
+        target6 = Unit("TargetUnit", "Harkonnen", 1, 2, hp=50)
+        gs6.units.append(attacker6)
+        gs6.units.append(target6)
+        # Need 50 more XP to reach 250 for rank 2
+        for _ in range(10):
+            dmg6 = attacker6.attack(target6)
+            self.assertEqual(dmg6, 5)
+        self.assertEqual(attacker6.xp, 250)
+        self.assertEqual(attacker6.rank, 2)  # promoted to rank 2
+        self.assertEqual(attacker6.attack_damage, 30)  # base 20 + 5 (rank 1) + 5 (rank 2)
         """test_train_unit: successful training with credit deduction and unit creation,
         and insufficient credits returning None."""
         # Test 1: Successful training - Trike costs 150
