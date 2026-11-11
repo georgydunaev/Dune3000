@@ -310,3 +310,65 @@ def generate_unit_svg(unit_type: str, house: str, size: int = 32) -> str:
             f'<polygon points="{points}" fill="{color}" fill-opacity="0.9"/>'
             f'</svg>'
         )
+
+
+def generate_minimap_svg(state_dict: dict, pixel_size: int = 4) -> str:
+    """Renders a tactical overhead minimap SVG from a GameState dictionary.
+
+    Args:
+        state_dict: Serialized game state dictionary (width, height, tiles, buildings, units, sandworms).
+        pixel_size: Pixel dimensions per tile cell (default 4).
+
+    Returns:
+        Complete SVG string displaying terrain, buildings, units, and sandworms.
+    """
+    width = state_dict.get("width", 16)
+    height = state_dict.get("height", 16)
+    tiles = state_dict.get("tiles", [])
+    w_px = width * pixel_size
+    h_px = height * pixel_size
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w_px}" height="{h_px}" viewBox="0 0 {w_px} {h_px}">'
+    ]
+
+    # Render terrain cells
+    for y, row in enumerate(tiles):
+        for x, tile in enumerate(row):
+            color = TERRAIN_COLORS.get(tile, "#e5c07b")
+            parts.append(
+                f'<rect x="{x * pixel_size}" y="{y * pixel_size}" width="{pixel_size}" height="{pixel_size}" fill="{color}"/>'
+            )
+
+    # Render buildings
+    b_size = max(2, pixel_size)
+    for b in state_dict.get("buildings", []):
+        bx = b.get("x", 0) * pixel_size
+        by = b.get("y", 0) * pixel_size
+        bcolor = HOUSE_COLORS.get(b.get("house", "Atreides"), "#2563eb")
+        parts.append(
+            f'<rect x="{bx}" y="{by}" width="{b_size}" height="{b_size}" fill="{bcolor}" stroke="#ffffff" stroke-width="0.5"/>'
+        )
+
+    # Render units
+    u_rad = max(1.5, pixel_size / 2)
+    half_px = pixel_size // 2
+    for u in state_dict.get("units", []):
+        ux = u.get("x", 0) * pixel_size + half_px
+        uy = u.get("y", 0) * pixel_size + half_px
+        ucolor = HOUSE_COLORS.get(u.get("house", "Atreides"), "#2563eb")
+        parts.append(
+            f'<circle cx="{ux}" cy="{uy}" r="{u_rad}" fill="{ucolor}"/>'
+        )
+
+    # Render sandworms
+    w_rad = max(2.0, pixel_size * 0.75)
+    for w in state_dict.get("sandworms", []):
+        wx = w.get("x", 0) * pixel_size + half_px
+        wy = w.get("y", 0) * pixel_size + half_px
+        parts.append(
+            f'<circle cx="{wx}" cy="{wy}" r="{w_rad}" fill="#b45309" stroke="#78350f" stroke-width="0.5"/>'
+        )
+
+    parts.append("</svg>")
+    return "".join(parts)

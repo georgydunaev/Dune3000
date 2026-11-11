@@ -15,6 +15,7 @@ from dune3000.engine import (
 from dune3000.procgen import (
     generate_building_svg,
     generate_explosion_svg,
+    generate_minimap_svg,
     generate_sandworm_svg,
     generate_terrain_svg,
     generate_unit_svg,
@@ -784,6 +785,28 @@ class TestDune3000Engine(unittest.TestCase):
         result = gs8.repair_building(b8, max_hp_to_restore=50)
         self.assertEqual(result, 0)
         self.assertEqual(b8.hp, 300)  # unchanged
+
+    def test_generate_minimap_svg(self):
+        """Verify generate_minimap_svg renders valid SVG containing terrain, house, and sandworm colors."""
+        gs = GameState(GridMap(8, 8))
+        gs.game_map.set_tile(1, 1, ROCK)
+        gs.buildings.append(Building("Barracks", "Atreides", 2, 2))
+        gs.units.append(Unit("Trooper", "Harkonnen", 3, 3))
+        gs.sandworms.append(Sandworm(4, 4))
+        
+        svg = generate_minimap_svg(gs.to_dict(), pixel_size=4)
+        self.assertIn("<svg", svg)
+        self.assertIn("</svg>", svg)
+        self.assertIn('width="32"', svg)
+        self.assertIn('height="32"', svg)
+        # Rock color
+        self.assertIn("#5c6370", svg)
+        # Atreides color
+        self.assertIn("#2563eb", svg)
+        # Harkonnen color
+        self.assertIn("#dc2626", svg)
+        # Sandworm color
+        self.assertIn("#b45309", svg)
 
 
 if __name__ == "__main__":

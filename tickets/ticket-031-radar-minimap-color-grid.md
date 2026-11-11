@@ -1,5 +1,5 @@
 # Ticket 31: Implement Radar Outpost Minimap SVG Generator (`generate_minimap_svg` in `procgen.py`)
-**State:** open
+**State:** closed
 **Labels:** dune3000, graphics
 
 ## Context
