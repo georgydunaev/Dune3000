@@ -1,6 +1,6 @@
 # Ticket 8: Implement Unit Combat Attack (`Unit.attack`)
 
-**State:** open
+**State:** closed
 **Priority:** high
 
 ## Description

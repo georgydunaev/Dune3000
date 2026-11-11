@@ -1,6 +1,6 @@
 # Ticket 5: Implement Rock-Paper-Scissors Weapon vs Armor Damage Calculation
 
-- **State:** open
+- **State:** closed
 - **Labels:** feature, combat
 
 ## Description

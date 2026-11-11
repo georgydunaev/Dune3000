@@ -43,6 +43,58 @@ class TestDune3000Engine(unittest.TestCase):
         target = worm.find_nearest_target([u_safe, u_sand], gm)
         self.assertIs(target, u_sand)
 
+    def test_sandworm_step_and_devour(self):
+        """Test Sandworm.step: move towards target and devour when adjacent."""
+        gm = GridMap(8, 8)
+        # Sandworm at (0, 0), target Trike at (3, 3) on SAFE tile (should be ignored for nearest)
+        # Actually find_nearest_target skips safe tiles, so let's place target on non-safe tile
+        gm.set_tile(3, 3, SAND)  # SAND is not safe (not ROCK/CONCRETE)
+        target = Unit("Trike", "Harkonnen", 3, 3)
+        worm = Sandworm(0, 0)
+        gs = GameState(gm)
+        gs.units.append(target)
+
+        # Step 1: move towards target (x < target.x => x += 1)
+        result = worm.step(gs)
+        self.assertIsNone(result)
+        self.assertEqual(worm.x, 1)
+        self.assertEqual(worm.y, 0)
+
+        # Step 2: move closer (now at x=1, still x < 3)
+        result = worm.step(gs)
+        self.assertIsNone(result)
+        self.assertEqual(worm.x, 2)
+        self.assertEqual(worm.y, 0)
+
+        # Step 3: move closer (now at x=2, still x < 3)
+        result = worm.step(gs)
+        self.assertIsNone(result)
+        self.assertEqual(worm.x, 3)
+        self.assertEqual(worm.y, 0)
+
+        # Step 4: now at (3, 0), same x as target (3, 3), y < target.y => y += 1
+        result = worm.step(gs)
+        self.assertIsNone(result)
+        self.assertEqual(worm.x, 3)
+        self.assertEqual(worm.y, 1)
+
+        # Step 5: y < target.y => y += 1
+        result = worm.step(gs)
+        self.assertIsNone(result)
+        self.assertEqual(worm.x, 3)
+        self.assertEqual(worm.y, 2)
+
+        # Step 6: y < target.y => y += 1, now at (3, 3) == target position => devour!
+        result = worm.step(gs)
+        self.assertIsNotNone(result)
+        self.assertEqual(result, target)
+        self.assertEqual(target.hp, 0)
+        self.assertNotIn(target, gs.units)
+
+        # After devour, no more targets should exist
+        result2 = worm.step(gs)
+        self.assertIsNone(result2)
+
     def test_procedural_terrain_svg(self):
         svg = generate_terrain_svg(SPICE_THICK, size=32, seed=3)
         self.assertIn("<svg", svg)
@@ -373,6 +425,67 @@ class TestDune3000Engine(unittest.TestCase):
         result = harv8.move_towards(5, 1, gs8.game_map)
         self.assertEqual(result, (5, 4))
 
+
+    def test_unit_attack(self):
+        """test_unit_attack: in-range damage, out-of-range (0), and HP clamping at 0."""
+        # Test 1: In-range attack damages target (bullet vs heavy: 20 * 0.25 = 5)
+        gs = GameState(GridMap(8, 8))
+        attacker = Unit("CombatUnit", "Atreides", 2, 2, hp=50)
+        target = Unit("TargetUnit", "Harkonnen", 2, 3, hp=50)  # dist = 1, within range 3
+        gs.units.append(attacker)
+        gs.units.append(target)
+        dmg = attacker.attack(target)
+        self.assertEqual(dmg, 5)  # compute_damage("bullet", "heavy", 20) = 5
+        self.assertEqual(target.hp, 45)  # 50 - 5 = 45
+
+        # Test 2: Out-of-range attack returns 0
+        gs2 = GameState(GridMap(8, 8))
+        attacker2 = Unit("Sniper", "Atreides", 1, 1, hp=50, attack_range=3)
+        target2 = Unit("TargetUnit", "Harkonnen", 5, 1, hp=50)  # dist = 4, > range 3
+        gs2.units.append(attacker2)
+        gs2.units.append(target2)
+        dmg2 = attacker2.attack(target2)
+        self.assertEqual(dmg2, 0)
+        self.assertEqual(target2.hp, 50)  # HP unchanged
+
+        # Test 3: HP clamped at 0 when damage exceeds HP
+        gs3 = GameState(GridMap(8, 8))
+        attacker3 = Unit("CombatUnit", "Atreides", 1, 1, hp=50)
+        target3 = Unit("WeakUnit", "Harkonnen", 1, 2, hp=5)  # dist = 1, within range
+        gs3.units.append(attacker3)
+        gs3.units.append(target3)
+        dmg3 = attacker3.attack(target3)
+        self.assertEqual(dmg3, 5)
+        self.assertEqual(target3.hp, 0)  # clamped at 0, not negative
+
+        # Test 4: Dead attacker returns 0
+        gs4 = GameState(GridMap(8, 8))
+        attacker4 = Unit("CombatUnit", "Atreides", 1, 1, hp=0)  # dead
+        target4 = Unit("TargetUnit", "Harkonnen", 1, 2, hp=50)
+        gs4.units.append(attacker4)
+        gs4.units.append(target4)
+        dmg4 = attacker4.attack(target4)
+        self.assertEqual(dmg4, 0)
+
+        # Test 5: Dead target returns 0
+        gs5 = GameState(GridMap(8, 8))
+        attacker5 = Unit("CombatUnit", "Atreides", 1, 1, hp=50)
+        target5 = Unit("TargetUnit", "Harkonnen", 1, 2, hp=0)  # dead
+        gs5.units.append(attacker5)
+        gs5.units.append(target5)
+        dmg5 = attacker5.attack(target5)
+        self.assertEqual(dmg5, 0)
+
+        # Test 6: Default weapon vs default armor (bullet vs heavy)
+        gs6 = GameState(GridMap(8, 8))
+        attacker6 = Unit("CombatUnit", "Atreides", 1, 1, hp=50)
+        target6 = Unit("TargetUnit", "Harkonnen", 1, 2, hp=100)
+        gs6.units.append(attacker6)
+        gs6.units.append(target6)
+        dmg6 = attacker6.attack(target6)
+        # compute_damage("bullet", "heavy", 20) = max(1, int(20 * 0.25 + 0.5)) = max(1, 5) = 5
+        self.assertEqual(dmg6, 5)
+        self.assertEqual(target6.hp, 95)
 
 if __name__ == "__main__":
     unittest.main()

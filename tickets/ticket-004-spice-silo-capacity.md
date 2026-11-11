@@ -1,6 +1,6 @@
 # Ticket 4: Implement Spice Silo Capacity and Credit Storage Cap in `GameState`
 
-- **State:** open
+- **State:** closed
 - **Labels:** feature, engine
 
 ## Description

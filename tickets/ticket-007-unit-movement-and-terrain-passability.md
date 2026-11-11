@@ -1,6 +1,6 @@
 # Ticket 7: Implement Unit Movement and Bounds Clamping (`Unit.move_towards`)
 
-**State:** open
+**State:** closed
 **Priority:** high
 
 ## Description

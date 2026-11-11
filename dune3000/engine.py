@@ -37,6 +37,10 @@ class Unit:
     max_hp: int = 100
     spice_carried: int = 0
     max_spice: int = 700
+    weapon_type: str = "bullet"
+    armor_type: str = "heavy"
+    attack_damage: int = 20
+    attack_range: int = 3
 
     def move_towards(self, target_x: int, target_y: int, game_map: "GridMap") -> Tuple[int, int]:
         """
@@ -102,6 +106,26 @@ class Unit:
             game_map.set_tile(self.x, self.y, SAND)
         return 0
 
+    def attack(self, target) -> int:
+        """
+        Attack the target unit.
+
+        If attacker or target has hp <= 0, returns 0.
+        If target is out of range (Manhattan distance > attack_range), returns 0.
+        Otherwise, computes damage and reduces target's hp.
+        """
+        if self.hp <= 0 or target.hp <= 0:
+            return 0
+
+        dist = abs(self.x - target.x) + abs(self.y - target.y)
+        if dist > self.attack_range:
+            return 0
+
+        target_armor = getattr(target, "armor_type", "building")
+        dmg = compute_damage(self.weapon_type, target_armor, self.attack_damage)
+        target.hp = max(0, target.hp - dmg)
+        return dmg
+
 
 @dataclass
 class Sandworm:
@@ -123,6 +147,38 @@ class Sandworm:
                 best_dist = dist
                 best_unit = u
         return best_unit
+
+    def step(self, game_state: "GameState") -> Optional[Unit]:
+        """Move towards the nearest vulnerable unit and devour if adjacent.
+
+        1. Find the nearest vulnerable unit via find_nearest_target.
+        2. If no target, return None.
+        3. Move 1 step closer in X then Y direction.
+        4. If adjacent after moving, devour the unit (set hp=0, remove from units, return target).
+        5. Otherwise return None.
+        """
+        target = self.find_nearest_target(game_state.units, game_state.game_map)
+        if target is None:
+            return None
+
+        # Move 1 step closer
+        if self.x < target.x:
+            self.x += 1
+        elif self.x > target.x:
+            self.x -= 1
+        elif self.y < target.y:
+            self.y += 1
+        elif self.y > target.y:
+            self.y -= 1
+
+        # Devour if adjacent
+        if (self.x, self.y) == (target.x, target.y):
+            target.hp = 0
+            if target in game_state.units:
+                game_state.units.remove(target)
+            return target
+
+        return None
 
 
 class GridMap:

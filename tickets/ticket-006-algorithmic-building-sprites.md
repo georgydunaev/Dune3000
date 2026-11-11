@@ -1,6 +1,6 @@
 # Ticket 6: Implement Algorithmic Building Sprite SVG Generator in `procgen.py`
 
-- **State:** open
+- **State:** closed
 - **Labels:** feature, graphics
 
 ## Description
