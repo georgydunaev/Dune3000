@@ -1,10 +1,12 @@
 import unittest
 from dune3000.engine import (
     CONCRETE,
+    HOUSE_SPECIAL_UNITS,
     ROCK,
     SAND,
     SPICE_THICK,
     SPICE_THIN,
+    SPECIAL_UNIT_COST,
     Building,
     GameState,
     GridMap,
@@ -606,6 +608,75 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertIsNotNone(result5)  # 1000 >= 200
         self.assertEqual(gs5.credits["Atreides"], 800)  # 1000 - 200
 
+
+    def test_spawn_special_unit(self):
+        """test_spawn_special_unit: verify stats, credit deduction, and failure cases
+        for all three houses plus insufficient credits and unknown house."""
+        expected_types = {
+            "Atreides": "SonicTank",
+            "Harkonnen": "Devastator",
+            "Ordos": "Deviator",
+        }
+        for i, house in enumerate(["Atreides", "Harkonnen", "Ordos"]):
+            gs = GameState(GridMap(8, 8))
+            gs.credits[house] = 1000
+            result = gs.spawn_special_unit(house, 2 + i, 3 + i)
+            self.assertIsNotNone(result)
+            spec = HOUSE_SPECIAL_UNITS[house]
+            # Unit type and house
+            self.assertEqual(result.unit_type, expected_types[house])
+            self.assertEqual(result.house, house)
+            # Position
+            self.assertEqual(result.x, 2 + i)
+            self.assertEqual(result.y, 3 + i)
+            # Configured stats
+            self.assertEqual(result.hp, spec["hp"])
+            self.assertEqual(result.max_hp, spec["max_hp"])
+            self.assertEqual(result.attack_damage, spec["attack_damage"])
+            self.assertEqual(result.attack_range, spec["attack_range"])
+            self.assertEqual(result.weapon_type, spec["weapon_type"])
+            self.assertEqual(result.armor_type, spec["armor_type"])
+            # Appended to units, credits deducted by 300
+            self.assertIn(result, gs.units)
+            self.assertEqual(gs.credits[house], 1000 - SPECIAL_UNIT_COST)
+
+        # Exact stat spot checks from the ticket
+        self.assertEqual(HOUSE_SPECIAL_UNITS["Atreides"],
+                         {"unit_type": "SonicTank", "hp": 130, "max_hp": 130,
+                          "attack_damage": 45, "attack_range": 4,
+                          "weapon_type": "shell", "armor_type": "heavy"})
+        self.assertEqual(HOUSE_SPECIAL_UNITS["Harkonnen"],
+                         {"unit_type": "Devastator", "hp": 220, "max_hp": 220,
+                          "attack_damage": 55, "attack_range": 3,
+                          "weapon_type": "shell", "armor_type": "heavy"})
+        self.assertEqual(HOUSE_SPECIAL_UNITS["Ordos"],
+                         {"unit_type": "Deviator", "hp": 110, "max_hp": 110,
+                          "attack_damage": 35, "attack_range": 4,
+                          "weapon_type": "missile", "armor_type": "heavy"})
+
+        # Insufficient credits: returns None, credits unchanged, no unit appended
+        gs2 = GameState(GridMap(8, 8))
+        gs2.credits["Atreides"] = SPECIAL_UNIT_COST - 1  # 299 < 300
+        result2 = gs2.spawn_special_unit("Atreides", 1, 1)
+        self.assertIsNone(result2)
+        self.assertEqual(gs2.credits["Atreides"], SPECIAL_UNIT_COST - 1)
+        self.assertEqual(len(gs2.units), 0)
+
+        # Unknown house: returns None even with enough credits
+        gs3 = GameState(GridMap(8, 8))
+        gs3.credits["Corrino"] = 5000
+        result3 = gs3.spawn_special_unit("Corrino", 1, 1)
+        self.assertIsNone(result3)
+        self.assertEqual(gs3.credits["Corrino"], 5000)
+        self.assertEqual(len(gs3.units), 0)
+
+        # Known house absent from credits dict (get() defaults to 0): returns None
+        gs4 = GameState(GridMap(8, 8))
+        del gs4.credits["Atreides"]
+        result4 = gs4.spawn_special_unit("Atreides", 1, 1)
+        self.assertIsNone(result4)
+        self.assertNotIn("Atreides", gs4.credits)
+        self.assertEqual(len(gs4.units), 0)
 
     def test_construct_building(self):
         gs = GameState(GridMap(8, 8))

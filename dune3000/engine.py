@@ -18,6 +18,39 @@ UNIT_COSTS: Dict[str, int] = {"Trike": 150, "CombatTank": 300, "Harvester": 400}
 
 BUILDING_COSTS: Dict[str, int] = {"WindTrap": 200, "Refinery": 400, "Barracks": 250, "Silo": 150}
 
+# Signature special vehicle of each Great House (spawned via GameState.spawn_special_unit).
+HOUSE_SPECIAL_UNITS: Dict[str, Dict] = {
+    "Atreides": {
+        "unit_type": "SonicTank",
+        "hp": 130,
+        "max_hp": 130,
+        "attack_damage": 45,
+        "attack_range": 4,
+        "weapon_type": "shell",
+        "armor_type": "heavy",
+    },
+    "Harkonnen": {
+        "unit_type": "Devastator",
+        "hp": 220,
+        "max_hp": 220,
+        "attack_damage": 55,
+        "attack_range": 3,
+        "weapon_type": "shell",
+        "armor_type": "heavy",
+    },
+    "Ordos": {
+        "unit_type": "Deviator",
+        "hp": 110,
+        "max_hp": 110,
+        "attack_damage": 35,
+        "attack_range": 4,
+        "weapon_type": "missile",
+        "armor_type": "heavy",
+    },
+}
+
+SPECIAL_UNIT_COST: int = 300
+
 
 @dataclass
 class Building:
@@ -312,6 +345,33 @@ class GameState:
             return None
         self.credits[house] -= cost
         unit = Unit(unit_type=unit_type, house=house, x=x, y=y)
+        self.units.append(unit)
+        return unit
+
+    def spawn_special_unit(self, house: str, x: int, y: int) -> Optional[Unit]:
+        """Spawn the house's signature special unit for SPECIAL_UNIT_COST credits.
+
+        Returns None (without spending credits) if the house is unknown to
+        HOUSE_SPECIAL_UNITS or has fewer than SPECIAL_UNIT_COST credits.
+        Otherwise deducts the cost, appends the configured Unit at (x, y) to
+        self.units, and returns it.
+        """
+        spec = HOUSE_SPECIAL_UNITS.get(house)
+        if spec is None or self.credits.get(house, 0) < SPECIAL_UNIT_COST:
+            return None
+        self.credits[house] -= SPECIAL_UNIT_COST
+        unit = Unit(
+            unit_type=spec["unit_type"],
+            house=house,
+            x=x,
+            y=y,
+            hp=spec["hp"],
+            max_hp=spec["max_hp"],
+            weapon_type=spec["weapon_type"],
+            armor_type=spec["armor_type"],
+            attack_damage=spec["attack_damage"],
+            attack_range=spec["attack_range"],
+        )
         self.units.append(unit)
         return unit
 
