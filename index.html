@@ -222,24 +222,33 @@
       flex: 1 1 800px;
       min-width: 0;
     }
+    #viewport-wrapper {
+      flex: 1 1 0;
+      min-width: 0;
+      width: 100%;
+    }
     #canvas-container {
       position: relative;
       border: 2px solid #334155;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
-      background: #000;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+      background: #080c14;
+      width: 100%;
       max-width: 100%;
-      height: 672px;
-      overflow-x: auto;
-      overflow-y: hidden;
+      aspect-ratio: 54 / 30;
+      overflow: hidden; /* Avoid all scrollbars completely */
       user-select: none;
-      scrollbar-width: thin;
-      scrollbar-color: #f59e0b #10141d;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
     canvas#gameCanvas {
       display: block;
-      width: 1344px;
-      height: 672px;
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      object-fit: contain;
       image-rendering: pixelated;
+      image-rendering: crisp-edges;
       cursor: crosshair;
     }
     #sidebar {
@@ -441,16 +450,16 @@
   <div id="main-area">
     <div id="viewport-wrapper">
       <div id="canvas-container">
-        <canvas id="gameCanvas" width="1344" height="756"></canvas>
+        <canvas id="gameCanvas" width="1512" height="840"></canvas>
       </div>
     </div>
     <div id="sidebar">
       <div class="panel-box">
         <div class="panel-header">
-          <span>Arrakis Radar (48x27)</span>
+          <span>Arrakis Radar (54x30)</span>
           <span id="radar-status" style="color:#22c55e">ONLINE</span>
         </div>
-        <canvas id="radar-canvas" width="288" height="162"></canvas>
+        <canvas id="radar-canvas" width="288" height="160"></canvas>
       </div>
       <div class="panel-box">
         <div class="panel-header">
@@ -692,6 +701,38 @@
       cctx.fillRect(2, 60, 2, 2); cctx.fillRect(60, 60, 2, 2);
       patternCanvases.CONCRETE = concC;
       patterns.CONCRETE = ctx.createPattern(concC, 'repeat');
+
+      // 5. Seamless Rich Melange Spice (Thick)
+      const spThickC = document.createElement('canvas');
+      spThickC.width = 64; spThickC.height = 64;
+      const stCtx = spThickC.getContext('2d');
+      stCtx.fillStyle = '#9a3412';
+      stCtx.fillRect(0, 0, 64, 64);
+      for (let i = 0; i < 30; i++) {
+        const sx = (i * 17) % 64, sy = (i * 23) % 64;
+        stCtx.fillStyle = i % 2 === 0 ? '#ea580c' : '#dc2626';
+        stCtx.fillRect(sx, sy, 4, 4);
+        stCtx.fillStyle = '#fef08a';
+        stCtx.fillRect(sx + 1, sy + 1, 2, 2);
+      }
+      patternCanvases.SPICE_THICK = spThickC;
+      patterns.SPICE_THICK = ctx.createPattern(spThickC, 'repeat');
+
+      // 6. Seamless Amber Spice Dunes (Thin)
+      const spThinC = document.createElement('canvas');
+      spThinC.width = 64; spThinC.height = 64;
+      const snCtx = spThinC.getContext('2d');
+      snCtx.fillStyle = '#b45309';
+      snCtx.fillRect(0, 0, 64, 64);
+      for (let i = 0; i < 18; i++) {
+        const sx = (i * 19) % 64, sy = (i * 29) % 64;
+        snCtx.fillStyle = '#f59e0b';
+        snCtx.fillRect(sx, sy, 3, 3);
+        snCtx.fillStyle = '#fef3c7';
+        snCtx.fillRect(sx + 1, sy + 1, 1, 1);
+      }
+      patternCanvases.SPICE_THIN = spThinC;
+      patterns.SPICE_THIN = ctx.createPattern(spThinC, 'repeat');
     }
 
     /* =========================================================================
@@ -706,7 +747,7 @@
     /* =========================================================================
        WORLD & ENGINE CONSTANTS (48x24 Battlefield)
        ========================================================================= */
-    const TILE = 28, W = 48, H = 27;
+    const TILE = 28, W = 54, H = 30;
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const radarCanvas = document.getElementById('radar-canvas');
@@ -761,6 +802,7 @@
     let carryalls = [];
     let sandworms = [];
     let particles = [];
+    let floatingTexts = [];
 
     generateSeamlessTextures();
 
@@ -771,34 +813,53 @@
       tiles = Array.from({ length: H }, (_, y) =>
         Array.from({ length: W }, (_, x) => {
           // Atreides Base Plateau (all starting structures paved on CONCRETE)
-          if (x <= 9 && y <= 10) {
-            if (x >= 1 && x <= 9 && y >= 1 && y <= 10) return 'CONCRETE';
+          if (x <= 10 && y <= 11) {
+            if (x >= 1 && x <= 10 && y >= 1 && y <= 11) return 'CONCRETE';
             return 'ROCK';
           }
           // Harkonnen Base Plateau
-          if (x >= W - 11 && y >= H - 11) {
-            if (x >= W - 10 && x <= W - 2 && y >= H - 10 && y <= H - 2) return 'CONCRETE';
+          if (x >= W - 12 && y >= H - 12) {
+            if (x >= W - 11 && x <= W - 2 && y >= H - 11 && y <= H - 2) return 'CONCRETE';
             return 'ROCK';
           }
-          // Mountains & Craters
-          if ((x === 20 && y <= 9) || (x === 27 && y >= 17)) return 'MOUNTAIN';
-          if (Math.hypot(x - 14, y - 6) < 2.2 || Math.hypot(x - 34, y - 21) < 2.2) return 'CRATER';
-          if (Math.hypot(x - 12, y - 19) < 2.0 || Math.hypot(x - 36, y - 7) < 2.0) return 'ROCK';
 
-          // Rich Arrakis Spice Basin at center
-          if (Math.hypot(x - 24, y - 13.5) < 3.8) return (x + y) % 2 === 0 ? 'SPICE_THICK' : 'SPICE_THIN';
-          if (Math.hypot(x - 16, y - 12) < 2.4 || Math.hypot(x - 32, y - 15) < 2.4) return 'SPICE_THIN';
-          if (Math.hypot(x - 8, y - 16) < 2.0 || Math.hypot(x - 40, y - 10) < 2.0) return 'SPICE_THIN';
+          // Mountain Ranges & Craters
+          if ((x === 24 && y <= 12) || (x === 33 && y >= 18)) return 'MOUNTAIN';
+          if (Math.hypot(x - 14, y - 6) < 2.4 || Math.hypot(x - 42, y - 24) < 2.4) return 'CRATER';
+          if (Math.hypot(x - 12, y - 22) < 2.2 || Math.hypot(x - 44, y - 8) < 2.2) return 'ROCK';
 
-          if ((x * 5 + y * 7) % 13 === 0) return 'DUNES';
+          // 1. Central Grand Spice Basin
+          const dCenter = Math.hypot(x - 27, y - 15);
+          if (dCenter < 3.2) return 'SPICE_THICK';
+          if (dCenter < 5.4) return 'SPICE_THIN';
+
+          // 2. Northwest Rich Spice Field
+          const dNW = Math.hypot(x - 18, y - 9);
+          if (dNW < 2.0) return 'SPICE_THICK';
+          if (dNW < 3.6) return 'SPICE_THIN';
+
+          // 3. Southwest Spice Field
+          const dSW = Math.hypot(x - 16, y - 23);
+          if (dSW < 2.0) return 'SPICE_THICK';
+          if (dSW < 3.6) return 'SPICE_THIN';
+
+          // 4. Northeast Spice Field
+          const dNE = Math.hypot(x - 36, y - 8);
+          if (dNE < 2.0) return 'SPICE_THICK';
+          if (dNE < 3.6) return 'SPICE_THIN';
+
+          // 5. Southeast Spice Field
+          const dSE = Math.hypot(x - 38, y - 22);
+          if (dSE < 2.0) return 'SPICE_THICK';
+          if (dSE < 3.6) return 'SPICE_THIN';
+
+          // Desert Sand & Dunes
+          if ((x * 5 + y * 7) % 11 === 0) return 'DUNES';
           return 'SAND';
         })
       );
     }
 
-    /* =========================================================================
-       MISSION RESET & DIFFICULTY
-       ========================================================================= */
     function resetMissionState() {
       initMap();
       const startCredits = difficulty === 'easy' ? 4500 : (difficulty === 'hard' ? 1200 : 2500);
@@ -938,12 +999,65 @@
       }
 
       logMsg(`Mission initialized on ${difficulty.toUpperCase()} difficulty. 48x27 Widescreen Battlefield active.`, 'sys');
+      // Subterranean Spice Bloom Tremor Eruption (Dynamic Economic Hotspot)
+      if (Math.random() < 0.04) {
+        const bx = Math.floor(14 + Math.random() * (W - 28));
+        const by = Math.floor(8 + Math.random() * (H - 16));
+        if (tiles[by] && (tiles[by][bx] === 'SAND' || tiles[by][bx] === 'DUNES')) {
+          tiles[by][bx] = 'SPICE_THICK';
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const ny = by + dy, nx = bx + dx;
+              if (tiles[ny] && tiles[ny][nx] !== 'ROCK' && tiles[ny][nx] !== 'CONCRETE' && tiles[ny][nx] !== 'MOUNTAIN') {
+                if (tiles[ny][nx] !== 'SPICE_THICK') tiles[ny][nx] = 'SPICE_THIN';
+              }
+            }
+          }
+          playSound('sonic');
+          addExplosion((bx + 0.5) * TILE, (by + 0.5) * TILE, 42);
+          addFloatingText("SPICE BLOOM DETONATION!", (bx + 0.5) * TILE, (by + 0.5) * TILE, '#f97316');
+          logMsg(`SEISMIC ALERT: Spice Bloom erupted in sector (${bx}, ${by})! Fresh melange deposits ready for harvesting.`, 'economy');
+        }
+      }
+
       updateUI();
     }
 
     function setDifficulty(diff) {
       difficulty = diff;
       logMsg(`Difficulty set to ${diff.toUpperCase()}. Press Restart Mission to apply changes.`, 'sys');
+    }
+
+    /* =========================================================================
+       FLOATING COMBAT & ECONOMIC FLOATING NUMBERS
+       ========================================================================= */
+    function addFloatingText(text, x, y, color = '#facc15') {
+      floatingTexts.push({
+        text, x, y, color, life: 1.0, vy: -24
+      });
+    }
+
+    function updateFloatingTexts(dt) {
+      for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        const ft = floatingTexts[i];
+        ft.y += ft.vy * dt;
+        ft.life -= dt * 0.9;
+        if (ft.life <= 0) floatingTexts.splice(i, 1);
+      }
+    }
+
+    function renderFloatingTexts() {
+      floatingTexts.forEach(ft => {
+        ctx.save();
+        ctx.font = 'bold 12px monospace';
+        ctx.fillStyle = ft.color;
+        ctx.globalAlpha = Math.max(0, ft.life);
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4;
+        ctx.fillText(ft.text, ft.x, ft.y);
+        ctx.restore();
+      });
     }
 
     /* =========================================================================
@@ -1388,8 +1502,10 @@
     canvas.addEventListener('mousedown', (e) => {
       initAudio();
       const rect = canvas.getBoundingClientRect();
-      dragStart.x = e.clientX - rect.left;
-      dragStart.y = e.clientY - rect.top;
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      dragStart.x = (e.clientX - rect.left) * scaleX;
+      dragStart.y = (e.clientY - rect.top) * scaleY;
       dragCurrent.x = dragStart.x;
       dragCurrent.y = dragStart.y;
       isDragging = true;
@@ -1398,8 +1514,10 @@
     canvas.addEventListener('mousemove', (e) => {
       if (isDragging) {
         const rect = canvas.getBoundingClientRect();
-        dragCurrent.x = e.clientX - rect.left;
-        dragCurrent.y = e.clientY - rect.top;
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        dragCurrent.x = (e.clientX - rect.left) * scaleX;
+        dragCurrent.y = (e.clientY - rect.top) * scaleY;
       }
     });
 
@@ -1407,8 +1525,10 @@
       if (!isDragging) return;
       isDragging = false;
       const rect = canvas.getBoundingClientRect();
-      dragCurrent.x = e.clientX - rect.left;
-      dragCurrent.y = e.clientY - rect.top;
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      dragCurrent.x = (e.clientX - rect.left) * scaleX;
+      dragCurrent.y = (e.clientY - rect.top) * scaleY;
 
       const dx = Math.abs(dragCurrent.x - dragStart.x);
       const dy = Math.abs(dragCurrent.y - dragStart.y);
@@ -1624,10 +1744,24 @@
     });
 
     radarCanvas.addEventListener('mousedown', (e) => {
+      initAudio();
       const rect = radarCanvas.getBoundingClientRect();
       const clickRatioX = (e.clientX - rect.left) / rect.width;
-      const targetScroll = clickRatioX * 1344 - canvasContainer.clientWidth / 2;
-      canvasContainer.scrollTo({ left: Math.max(0, targetScroll), behavior: 'smooth' });
+      const clickRatioY = (e.clientY - rect.top) / rect.height;
+      const targetGX = Math.max(1, Math.min(W - 2, Math.floor(clickRatioX * W)));
+      const targetGY = Math.max(1, Math.min(H - 2, Math.floor(clickRatioY * H)));
+
+      if (selectedUnits.length > 0) {
+        playSound('click');
+        selectedUnits.forEach((u, idx) => {
+          const row = Math.floor(idx / 4);
+          const col = idx % 4;
+          u.tx = Math.max(0.5, Math.min(W - 0.5, targetGX + (col - 1.5) * 0.85));
+          u.ty = Math.max(0.5, Math.min(H - 0.5, targetGY + (row - 1) * 0.85));
+          u.repairing = false;
+        });
+        logMsg(`Radar rally deployment ordered to sector (${targetGX}, ${targetGY}).`, 'sys');
+      }
     });
 
     /* =========================================================================
@@ -1649,6 +1783,7 @@
 
       updateGame(dt);
       updateParticles(dt);
+      updateFloatingTexts(dt);
 
       ctx.clearRect(0, 0, 1344, 672);
       renderMap(now);
@@ -1657,6 +1792,7 @@
       renderCarryalls(now);
       renderSandworms(now);
       renderParticles();
+      renderFloatingTexts();
       renderMarqueeBox();
 
       renderRadar(now);
@@ -1677,6 +1813,7 @@
               const harvestAmount = tile === 'SPICE_THICK' ? 35 : 18;
               u.spice = Math.min(u.maxSpice, u.spice + harvestAmount);
               playSound('harvest');
+              addFloatingText(`+${harvestAmount}`, u.x * TILE, u.y * TILE - 8, '#f59e0b');
               if (u.spice >= u.maxSpice) {
                 const ref = buildings.find(b => b.house === u.house && b.type === 'Refinery' && b.hp > 0);
                 if (ref) { u.tx = ref.x + 0.5; u.ty = ref.y + 0.5; }
@@ -1751,6 +1888,22 @@
           }
         }
 
+
+        // Harvester Direct Docking at Refinery
+        if (u.type === 'Harvester' && u.spice > 0 && !u.airlifted) {
+          const ref = buildings.find(b => b.house === u.house && b.type === 'Refinery' && b.hp > 0);
+          if (ref && Math.hypot(u.x - (ref.x + 0.5), u.y - (ref.y + 0.5)) < 1.3) {
+            credits[u.house] = Math.min(maxCapacity(u.house), credits[u.house] + u.spice);
+            addFloatingText(`+${u.spice} Spice`, (ref.x + 0.5) * TILE, ref.y * TILE - 10, '#22c55e');
+            playSound('harvest');
+            u.spice = 0;
+            u.wormPanic = false;
+            // Send back to nearest spice field
+            u.tx = u.house === 'Atreides' ? 18.5 : W - 18.5;
+            u.ty = u.house === 'Atreides' ? 9.5 : H - 9.5;
+            logMsg(`${u.house} Harvester completed offloading at Refinery. Returning to spice field!`, 'economy');
+          }
+        }
         // Worm threat detection & avoidance
         if (!u.isAir) {
           sandworms.forEach(w => {
@@ -1815,6 +1968,7 @@
           if (enemy && Math.random() < dt * 1.5) {
             enemy.hp = Math.max(0, enemy.hp - u.dmg);
             u.turretAngle = Math.atan2(enemy.y - u.y, enemy.x - u.x);
+            addFloatingText(`-${u.dmg}`, enemy.x * TILE, enemy.y * TILE - 8, '#ef4444');
 
             if (u.type === 'Bomber') {
               playSound('bomb');
@@ -1936,7 +2090,9 @@
               c.carryingUnit.x = ref.x + 0.5;
               c.carryingUnit.y = ref.y + 0.5;
               c.carryingUnit.airlifted = false;
-              credits[c.house] = Math.min(maxCapacity(c.house), credits[c.house] + (c.carryingUnit.spice || 0));
+              const unloadedSpice = c.carryingUnit.spice || 0;
+              credits[c.house] = Math.min(maxCapacity(c.house), credits[c.house] + unloadedSpice);
+              addFloatingText(`+${unloadedSpice} Spice`, (ref.x + 0.5) * TILE, ref.y * TILE - 12, '#22c55e');
               c.carryingUnit.spice = 0;
               c.carryingUnit.wormPanic = false;
               c.carryingUnit.tx = c.carryingUnit.x + (c.house === 'Atreides' ? 6 : -6);
@@ -2132,13 +2288,6 @@
 
           if (img && img.complete && img.naturalWidth > 0) {
             ctx.drawImage(img, px, py, TILE, TILE);
-            if (t === 'SPICE_THICK' || t === 'SPICE_THIN') {
-              const glow = Math.sin(animTime * 0.006 + x * 2 + y * 3) * 0.25 + 0.35;
-              ctx.fillStyle = t === 'SPICE_THICK'
-                ? `rgba(239, 68, 68, ${glow * 0.4})`
-                : `rgba(245, 158, 11, ${glow * 0.35})`;
-              ctx.fillRect(px, py, TILE, TILE);
-            }
           } else if (patterns[t]) {
             ctx.fillStyle = patterns[t];
             ctx.fillRect(px, py, TILE, TILE);
@@ -2161,6 +2310,64 @@
             ctx.fillRect(px, py, TILE, TILE);
           }
 
+          // === PROMINENT GLOWING SPICE CRYSTALS & AURAS (100% UNMISTAKABLY VISIBLE) ===
+          if (t === 'SPICE_THICK' || t === 'SPICE_THIN') {
+            const isThick = t === 'SPICE_THICK';
+            const pulse = 0.5 + 0.5 * Math.sin(animTime * 0.007 + x * 2.3 + y * 1.9);
+
+            // Radiant Spice Dust Aura
+            ctx.fillStyle = isThick
+              ? `rgba(220, 38, 38, ${0.4 + pulse * 0.3})`
+              : `rgba(245, 158, 11, ${0.3 + pulse * 0.25})`;
+            ctx.fillRect(px, py, TILE, TILE);
+
+            // Faceted Crystalline Melange Formations
+            const cx = px + TILE / 2, cy = py + TILE / 2;
+            const cRad = isThick ? 6.5 : 4.0;
+
+            // Primary Diamond Spice Crystal
+            ctx.fillStyle = isThick ? '#dc2626' : '#ea580c';
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - cRad);
+            ctx.lineTo(cx + cRad, cy);
+            ctx.lineTo(cx, cy + cRad);
+            ctx.lineTo(cx - cRad, cy);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#fef08a';
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+
+            // Inner Prismatic Glow
+            ctx.fillStyle = isThick ? '#f97316' : '#facc15';
+            ctx.beginPath();
+            ctx.arc(cx, cy, cRad * 0.45, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Specular Glint Star
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(cx - 0.75, cy - 0.75, 1.5, 1.5);
+
+            // Secondary Flanking Crystals on Thick Spice
+            if (isThick) {
+              ctx.fillStyle = '#fb923c';
+              ctx.beginPath();
+              ctx.arc(px + 6, py + 7, 2.5, 0, Math.PI * 2);
+              ctx.arc(px + 22, py + 21, 2.2, 0, Math.PI * 2);
+              ctx.arc(px + 21, py + 7, 2.0, 0, Math.PI * 2);
+              ctx.fill();
+            }
+
+            // Animated Glistening Sparkles
+            if ((x * 7 + y * 13 + Math.floor(animTime * 0.003)) % 4 === 0) {
+              const spX = px + 4 + (pulse * 20) % 20;
+              const spY = py + 4 + (pulse * 16) % 20;
+              ctx.fillStyle = '#fef08a';
+              ctx.fillRect(spX, spY, 2, 2);
+            }
+          }
+
+          // Subtle Tile Grid Line
           ctx.strokeStyle = 'rgba(0,0,0,0.06)';
           ctx.lineWidth = 0.5;
           ctx.strokeRect(px, py, TILE, TILE);
