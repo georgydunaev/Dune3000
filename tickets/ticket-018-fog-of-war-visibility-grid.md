@@ -1,6 +1,6 @@
 # Ticket 18: Implement Fog of War and Sight Radius Visibility (`GameState.compute_visibility`)
 
-**State:** open
+**State:** closed
 **Labels:** dune3000, gameplay, rts
 
 ## Context

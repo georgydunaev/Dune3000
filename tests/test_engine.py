@@ -297,6 +297,64 @@ class TestDune3000Engine(unittest.TestCase):
         result = compute_damage("bullet", "heavy", 3)
         self.assertEqual(result, 1)
 
+    def test_compute_visibility(self):
+        """test_compute_visibility: sight radius reveal for alive units/buildings,
+        and that dead (hp == 0) or enemy entities do not reveal tiles for house."""
+        gs = GameState(GridMap(16, 16))
+
+        # Place an alive Atreides building at (5, 5)
+        b_atr = Building("WindTrap", "Atreides", 5, 5)
+        gs.buildings.append(b_atr)
+
+        # Place a dead Atreides building at (5, 5) with hp=0 (should NOT reveal)
+        dead_b = Building("WindTrap", "Atreides", 5, 5, hp=0)
+        gs.buildings.append(dead_b)
+
+        # Place an alive Harkonnen unit (enemy, should NOT reveal for Atreides)
+        u_hkn = Unit("Trike", "Harkonnen", 3, 3)
+        gs.units.append(u_hkn)
+
+        # Place an alive Ordos unit at (2, 2) (enemy, should NOT reveal for Atreides)
+        u_ord = Unit("CombatTank", "Ordos", 2, 2)
+        gs.units.append(u_ord)
+
+        # Place an alive Atreides unit at (10, 10) (should reveal radius 3, far from building)
+        u_atr = Unit("Trike", "Atreides", 10, 10)
+        gs.units.append(u_atr)
+
+        vis = gs.compute_visibility("Atreides")
+
+        # The alive Atreides building at (5, 5) reveals tiles with Manhattan distance <= 4
+        # Check that (5, 5) itself is visible
+        self.assertIn((5, 5), vis)
+
+        # Check tiles within radius 4 of the building at (5, 5)
+        # (5, 5) + (0, 1) = (5, 6) distance 1
+        self.assertIn((5, 6), vis)
+        # (5, 5) + (0, 4) = (5, 9) distance 4
+        self.assertIn((5, 9), vis)
+        # (5, 5) + (0, 5) = (5, 10) distance 5 - should NOT be visible
+        self.assertNotIn((5, 10), vis)
+
+        # The alive Atreides unit at (10, 10) reveals tiles with Manhattan distance <= 3
+        # (10, 10) itself - far from the building at (5,5), dist = |10-5|+|10-5| = 10 > 4
+        self.assertIn((10, 10), vis)
+        # (10, 10) + (0, 3) = (10, 13) distance 3 from unit, far from building
+        self.assertIn((10, 13), vis)
+        # (10, 10) + (0, 4) = (10, 14) distance 4 from unit - should NOT be visible from unit
+        self.assertNotIn((10, 14), vis)
+
+        # Dead building should not reveal any tiles on its own
+        # (5, 5) is still visible because the ALIVE building at (5, 5) reveals it
+        self.assertIn((5, 5), vis)
+
+        # Enemy units should not reveal tiles for Atreides
+        # Harkonnen Trike at (3, 3): (3, 0) has dist 3 from enemy, but dist |5-3|+|5-0|=7 from building
+        self.assertNotIn((3, 0), vis)
+
+        # Ordos unit at (2, 2): (2, 0) has dist 2 from enemy, but dist |5-2|+|5-0|=8 from building
+        self.assertNotIn((2, 0), vis)
+
     def test_generate_unit_svg(self):
         """Test generate_unit_svg for Harvester, Trike, and CombatTank."""
         # Test Harvester with Atreides
@@ -642,6 +700,91 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertIn("<svg", exp0)
         self.assertIn("#ff4500", exp0)
         self.assertNotEqual(exp0, exp1)
+
+def test_repair_building(self):
+        """test_repair_building: verify normal repair, credit deduction, clamping at max_hp, and dead building rejection."""
+        # Test 1: Normal repair - missing=50, cost=(50+1)//2=25, 25 credits restore 50 HP
+        gs = GameState(GridMap(8, 8))
+        b = Building("Barracks", "Atreides", 2, 2, hp=350, max_hp=400)
+        gs.buildings.append(b)
+        gs.credits["Atreides"] = 25
+        result = gs.repair_building(b, max_hp_to_restore=50)
+        self.assertEqual(result, 50)
+        self.assertEqual(b.hp, 400)  # clamped to max_hp
+        self.assertEqual(gs.credits["Atreides"], 0)
+
+        # Test 2: Repair with one extra credit (26 credits for 50 HP repair, leaves 1 credit)
+        gs2 = GameState(GridMap(8, 8))
+        b2 = Building("Barracks", "Harkonnen", 3, 3, hp=350, max_hp=400)
+        gs2.buildings.append(b2)
+        gs2.credits["Harkonnen"] = 26
+        result = gs2.repair_building(b2, max_hp_to_restore=50)
+        self.assertEqual(result, 50)
+        self.assertEqual(b2.hp, 400)
+        self.assertEqual(gs2.credits["Harkonnen"], 1)
+
+        # Test 3: Repair with insufficient credits (13 credits restores 26 HP)
+        gs3 = GameState(GridMap(8, 8))
+        b3 = Building("Barracks", "Ordos", 4, 4, hp=350, max_hp=400)
+        gs3.buildings.append(b3)
+        gs3.credits["Ordos"] = 13
+        result = gs3.repair_building(b3, max_hp_to_restore=50)
+        # missing = min(400-350, 50) = 50, cost = 26
+        # With 13 credits: actual_restore = min(13*2, 50) = 26, actual_cost = 13
+        self.assertEqual(result, 26)
+        self.assertEqual(b3.hp, 376)  # 350 + 26 = 376
+        self.assertEqual(gs3.credits["Ordos"], 0)
+
+        # Test 4: Clamping at max_hp with partial credits
+        gs4 = GameState(GridMap(8, 8))
+        b4 = Building("Barracks", "Atreides", 1, 1, hp=390, max_hp=400)
+        gs4.buildings.append(b4)
+        gs4.credits["Atreides"] = 5  # 5 credits = 10 HP restores exactly the 10 missing
+        result = gs4.repair_building(b4, max_hp_to_restore=50)
+        # missing = min(400-390, 50) = 10, cost = (10+1)//2 = 5
+        # With 5 credits: actual_restore = min(10, 10) = 10, actual_cost = 5
+        self.assertEqual(result, 10)
+        self.assertEqual(b4.hp, 400)  # clamped to max_hp
+        self.assertEqual(gs4.credits["Atreides"], 0)
+
+        # Test 5: Dead building (hp == 0) rejection
+        gs5 = GameState(GridMap(8, 8))
+        b5 = Building("Barracks", "Atreides", 1, 1, hp=0, max_hp=400)
+        gs5.buildings.append(b5)
+        gs5.credits["Atreides"] = 100
+        result = gs5.repair_building(b5, max_hp_to_restore=50)
+        self.assertEqual(result, 0)
+        self.assertEqual(b5.hp, 0)  # unchanged
+
+        # Test 6: Already full HP building returns 0
+        gs6 = GameState(GridMap(8, 8))
+        b6 = Building("Barracks", "Harkonnen", 2, 2, hp=400, max_hp=400)
+        gs6.buildings.append(b6)
+        gs6.credits["Harkonnen"] = 100
+        result = gs6.repair_building(b6, max_hp_to_restore=50)
+        self.assertEqual(result, 0)
+
+        # Test 7: max_hp_to_restore <= 0 returns 0
+        gs7 = GameState(GridMap(8, 8))
+        b7 = Building("Barracks", "Ordos", 3, 3, hp=300, max_hp=400)
+        gs7.buildings.append(b7)
+        gs7.credits["Ordos"] = 50
+        result = gs7.repair_building(b7, max_hp_to_restore=0)
+        self.assertEqual(result, 0)
+
+        # Test 8: max_hp_to_restore negative returns 0
+        result = gs7.repair_building(b7, max_hp_to_restore=-10)
+        self.assertEqual(result, 0)
+
+        # Test 9: House with no credits (credits dict doesn't have the house)
+        gs8 = GameState(GridMap(8, 8))
+        b8 = Building("Barracks", "UnknownHouse", 1, 1, hp=300, max_hp=400)
+        gs8.buildings.append(b8)
+        # "UnknownHouse" not in default credits, get() returns 0
+        result = gs8.repair_building(b8, max_hp_to_restore=50)
+        self.assertEqual(result, 0)
+        self.assertEqual(b8.hp, 300)  # unchanged
+
 
 if __name__ == "__main__":
     unittest.main()

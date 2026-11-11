@@ -231,6 +231,33 @@ class GameState:
             return 1.0
         return max(0.25, round(produced / consumed, 4))
 
+    def compute_visibility(self, house: str) -> set:
+        """Compute the fog of war / sight radius visibility for a given house.
+
+        Every alive (hp > 0) building owned by house reveals all in-bounds tiles
+        (tx, ty) with Manhattan distance abs(b.x - tx) + abs(b.y - ty) <= 4.
+
+        Every alive (hp > 0) unit owned by house reveals all in-bounds tiles
+        (tx, ty) with Manhattan distance abs(u.x - tx) + abs(u.y - ty) <= 3.
+
+        Returns a set of (x, y) integer coordinate tuples that are in bounds on
+        self.game_map.
+        """
+        visible: set = set()
+        for b in self.buildings:
+            if b.house == house and b.hp > 0:
+                for tx in range(self.game_map.width):
+                    for ty in range(self.game_map.height):
+                        if abs(b.x - tx) + abs(b.y - ty) <= 4 and self.game_map.in_bounds(tx, ty):
+                            visible.add((tx, ty))
+        for u in self.units:
+            if u.house == house and u.hp > 0:
+                for tx in range(self.game_map.width):
+                    for ty in range(self.game_map.height):
+                        if abs(u.x - tx) + abs(u.y - ty) <= 3 and self.game_map.in_bounds(tx, ty):
+                            visible.add((tx, ty))
+        return visible
+
     def check_winner(self) -> Optional[str]:
         """Check if the game has a winner or a draw.
 
@@ -297,6 +324,50 @@ class GameState:
         power_consumed = 0 if building_type == "WindTrap" else 30
         b = Building(building_type=building_type, house=house, x=x, y=y, power_produced=power_produced, power_consumed=power_consumed)
         return self.place_building(b)
+
+    def repair_building(self, building: Building, max_hp_to_restore: int = 50) -> int:
+        """Repair a building by spending spice credits.
+
+        Each 1 credit restores up to 2 HP.
+        If the building's house has fewer credits than needed,
+        only restore available_credits * 2 HP and spend available_credits.
+
+        Args:
+            building: The building to repair.
+            max_hp_to_restore: Maximum HP to attempt to restore (default 50).
+
+        Returns:
+            The actual HP restored (int).
+        """
+        # Early return conditions
+        if building.hp <= 0 or building.hp >= building.max_hp or max_hp_to_restore <= 0:
+            return 0
+
+        # Calculate missing HP (capped by max_hp_to_restore)
+        missing = min(building.max_hp - building.hp, max_hp_to_restore)
+
+        # Each 1 credit restores up to 2 HP
+        cost = (missing + 1) // 2
+
+        # Available credits for this house
+        available_credits = self.credits.get(building.house, 0)
+
+        if available_credits < cost:
+            # Not enough credits for full repair: restore available_credits * 2 HP
+            actual_restore = min(available_credits * 2, missing)
+            actual_cost = available_credits
+        else:
+            # Full repair possible
+            actual_restore = missing
+            actual_cost = cost
+
+        # Deduct credits
+        self.credits[building.house] = available_credits - actual_cost
+
+        # Increase HP, clamped to max_hp
+        building.hp = min(building.max_hp, building.hp + actual_restore)
+
+        return actual_restore
 
     def to_dict(self) -> Dict:
         """Serialize the game state to a dictionary for JSON snapshot.
