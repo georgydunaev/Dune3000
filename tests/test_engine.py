@@ -47,6 +47,50 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertIn("<svg", svg)
         self.assertIn("#be5046", svg)
 
+    def test_place_building_on_concrete(self):
+        """CONCRETE tile keeps building at full HP."""
+        gs = GameState(GridMap(8, 8, default_tile=CONCRETE))
+        b = Building("Barracks", "Atreides", 2, 2)
+        result = gs.place_building(b)
+        self.assertEqual(result.hp, result.max_hp)
+        self.assertIn(result, gs.buildings)
+
+    def test_place_building_on_rock(self):
+        """ROCK tile applies 50% foundation penalty (minimum HP 1)."""
+        gs = GameState(GridMap(8, 8, default_tile=ROCK))
+        b = Building("Barracks", "Atreides", 2, 2)
+        result = gs.place_building(b)
+        expected_hp = max(1, b.max_hp // 2)
+        self.assertEqual(result.hp, expected_hp)
+        self.assertIn(result, gs.buildings)
+
+    def test_place_building_on_sand_default(self):
+        """SAND tile (default) places building without penalty (HP stays at max_hp since no penalty)."""
+        gs = GameState(GridMap(8, 8, default_tile=SAND))
+        b = Building("Barracks", "Atreides", 2, 2)
+        result = gs.place_building(b)
+        # On SAND, no penalty is applied, so HP stays at max_hp (400)
+        self.assertEqual(result.hp, result.max_hp)
+        self.assertIn(result, gs.buildings)
+
+    def test_place_building_return_value(self):
+        """place_building returns the building it received."""
+        gs = GameState(GridMap(8, 8))
+        b = Building("Factory", "Harkonnen", 3, 3)
+        result = gs.place_building(b)
+        self.assertIs(result, b)
+
+    def test_place_building_appended_to_buildings(self):
+        """place_building appends the building to self.buildings."""
+        gs = GameState(GridMap(8, 8))
+        b1 = Building("Barracks", "Atreides", 1, 1)
+        b2 = Building("Factory", "Harkonnen", 2, 2)
+        gs.place_building(b1)
+        gs.place_building(b2)
+        self.assertEqual(len(gs.buildings), 2)
+        self.assertIn(b1, gs.buildings)
+        self.assertIn(b2, gs.buildings)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -125,3 +125,12 @@ class GameState:
         produced = sum(b.power_produced for b in self.buildings if b.house == house and b.hp > 0)
         consumed = sum(b.power_consumed for b in self.buildings if b.house == house and b.hp > 0)
         return produced, consumed
+
+    def place_building(self, building: Building) -> Building:
+        tile = self.game_map.get_tile(building.x, building.y)
+        if tile == CONCRETE:
+            building.hp = building.max_hp
+        elif tile == ROCK:
+            building.hp = max(1, building.max_hp // 2)
+        self.buildings.append(building)
+        return building
