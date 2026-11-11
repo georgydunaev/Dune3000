@@ -1990,6 +1990,8 @@
     function stepTick() {
       tickCount++;
 
+      if (window.harkonnenDeathHandCooldown > 0) window.harkonnenDeathHandCooldown--;
+
       // Skirmish AI Commander Execution
       if (autoplayMode === 'both') {
         stepAiCommander('Atreides');
@@ -2161,10 +2163,13 @@
         if (house === 'Atreides') {
           trainUnit('SonicTank', 600, house);
         } else {
-          // Harkonnen Death Hand Superweapon Strike
-          const targetB = enemyBuildings[Math.floor(Math.random() * enemyBuildings.length)];
-          if (targetB) {
-            triggerDeathHandStrike(targetB.x, targetB.y, house);
+          // Harkonnen Death Hand Superweapon Strike (45s Tactical Recharge Cooldown)
+          if (!window.harkonnenDeathHandCooldown || window.harkonnenDeathHandCooldown <= 0) {
+            const targetB = enemyBuildings[Math.floor(Math.random() * enemyBuildings.length)];
+            if (targetB) {
+              window.harkonnenDeathHandCooldown = 45;
+              triggerDeathHandStrike(targetB.x, targetB.y, house);
+            }
           }
         }
       } else if (cred >= 450 && hasBuilding(house, 'HeavyFactory') && Math.random() < 0.4) {
@@ -2524,7 +2529,11 @@
           // Priority 1: Full Harvester in field or under worm panic
           const harvFull = units.find(u => u.house === c.house && u.type === 'Harvester' && u.hp > 0 && !u.airlifted && (u.spice >= u.maxSpice || u.wormPanic));
           // Priority 2: Badly damaged vehicle needing repair bay medevac
-          const damagedTank = units.find(u => u.house === c.house && u.hp > 0 && !u.airlifted && !u.isAir && u.type !== 'Harvester' && u.hp < u.maxHp * 0.45);
+          const damagedTank = units.find(u => {
+            if (u.house !== c.house || u.hp <= 0 || u.airlifted || u.isAir || u.type === 'Harvester') return false;
+            const isArmoredVehicle = (u.type === 'CombatTank' || u.type === 'SiegeTank' || u.type === 'MissileTank' || u.type === 'SonicTank' || u.type === 'Trike' || u.type === 'Quad');
+            return isArmoredVehicle && u.hp < u.maxHp * 0.45 && !carryalls.some(other => other !== c && other.targetUnit === u);
+          });
           // Priority 3: Empty Harvester at Refinery ready to be airlifted OUT to spice field
           const harvAtRef = units.find(u => {
             if (u.house !== c.house || u.type !== 'Harvester' || u.hp <= 0 || u.airlifted || u.spice > 0) return false;
@@ -3953,7 +3962,9 @@
       const panel = document.getElementById('log-panel');
       const entry = document.createElement('div');
       entry.className = `log-entry log-${category}`;
-      entry.textContent = `[${tickCount.toString().padStart(4, '0')}] ${msg}`;
+      const mm = Math.floor(tickCount / 60).toString().padStart(2, '0');
+      const ss = (tickCount % 60).toString().padStart(2, '0');
+      entry.textContent = `[T+${mm}:${ss}] ${msg}`;
       panel.appendChild(entry);
       panel.scrollTop = panel.scrollHeight;
     }
