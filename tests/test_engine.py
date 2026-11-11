@@ -1345,6 +1345,56 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertEqual(attacker.xp, 100)
         self.assertEqual(attacker.rank, 1)
 
+    def test_trade_spice(self):
+        """test_trade_spice: buy/sell spice at 2/3 credits rate, capacity checks, multi-house."""
+        gs = GameState(GridMap(8, 8))
+
+        # 1. Buy 50 spice for Atreides: cost = 50 * 2 = 100 credits
+        harv = Unit("Harvester", "Atreides", 1, 1)
+        gs.units.append(harv)
+        res_buy = gs.trade_spice("Atreides", 50, buy=True)
+        self.assertEqual(res_buy, 50)
+        self.assertEqual(gs.credits["Atreides"], 900)  # 1000 - 100
+        self.assertEqual(gs.spice_carried["Atreides"], 50)
+        self.assertEqual(harv.spice_carried, 50)
+
+        # 2. Sell 30 spice for Atreides: gain = 30 * 3 = 90 credits
+        res_sell = gs.trade_spice("Atreides", 30, buy=False)
+        self.assertEqual(res_sell, 30)
+        self.assertEqual(gs.credits["Atreides"], 990)  # 900 + 90
+        self.assertEqual(gs.spice_carried["Atreides"], 20)
+        self.assertEqual(harv.spice_carried, 20)
+
+        # 3. Insufficient spice to sell -> returns 0, state unchanged
+        res_fail_sell = gs.trade_spice("Atreides", 100, buy=False)
+        self.assertEqual(res_fail_sell, 0)
+        self.assertEqual(gs.credits["Atreides"], 990)
+        self.assertEqual(gs.spice_carried["Atreides"], 20)
+
+        # 4. Insufficient credits to buy -> returns 0, state unchanged
+        gs.credits["Atreides"] = 10
+        res_fail_buy = gs.trade_spice("Atreides", 50, buy=True)
+        self.assertEqual(res_fail_buy, 0)
+        self.assertEqual(gs.credits["Atreides"], 10)
+        self.assertEqual(gs.spice_carried["Atreides"], 20)
+
+        # 5. Exceeding max_spice_capacity (base=1000) -> returns 0, state unchanged
+        gs.credits["Harkonnen"] = 5000
+        res_cap = gs.trade_spice("Harkonnen", 1001, buy=True)
+        self.assertEqual(res_cap, 0)
+        self.assertEqual(gs.credits["Harkonnen"], 5000)
+        self.assertEqual(gs.spice_carried["Harkonnen"], 0)
+
+        # 6. Works for Ordos
+        res_ordos = gs.trade_spice("Ordos", 100, buy=True)
+        self.assertEqual(res_ordos, 100)
+        self.assertEqual(gs.credits["Ordos"], 800)
+        self.assertEqual(gs.spice_carried["Ordos"], 100)
+
+        # 7. Unknown house returns 0 without modifying state
+        res_unknown = gs.trade_spice("Corrino", 50, buy=True)
+        self.assertEqual(res_unknown, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

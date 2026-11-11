@@ -883,6 +883,47 @@ class GameState:
         saboteur.hp = 0
         return True
 
+    def trade_spice(self, house: str, amount: int, buy: bool) -> int:
+        """Buy or sell spice at market prices.
+
+        - buy=True: Spends amount * 2 credits, increases house spice_carried by amount.
+          Rejects if insufficient credits or if spice_carried + amount > max_spice_capacity(house).
+        - buy=False (sell): Decreases house spice_carried by amount, gains amount * 3 credits.
+          Rejects if spice_carried < amount.
+        Returns amount traded, or 0 on failure/invalid request.
+        """
+        if house not in HOUSES or amount <= 0:
+            return 0
+
+        current_spice = self.spice_carried.get(house, 0)
+        current_credits = self.credits.get(house, 0)
+        max_cap = self.max_spice_capacity(house)
+
+        if buy:
+            cost = amount * 2
+            if current_credits < cost:
+                return 0
+            if current_spice + amount > max_cap:
+                return 0
+            self.credits[house] -= cost
+            self.spice_carried[house] = current_spice + amount
+            for u in self.units:
+                if u.house == house:
+                    u.spice_carried = self.spice_carried[house]
+                    break
+            return amount
+        else:
+            if current_spice < amount:
+                return 0
+            revenue = amount * 3
+            self.spice_carried[house] = current_spice - amount
+            self.credits[house] += revenue
+            for u in self.units:
+                if u.house == house:
+                    u.spice_carried = self.spice_carried[house]
+                    break
+            return amount
+
     def to_dict(self) -> Dict:
         """Serialize the game state to a dictionary for JSON snapshot.
         
