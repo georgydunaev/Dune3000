@@ -297,6 +297,19 @@ class GameState:
         self.credits[house] = self.credits.get(house, 0) + int(amount)
         return self.credits[house]
 
+    def sell_building(self, building: Building) -> int:
+        if building not in self.buildings or building.hp <= 0:
+            return 0
+        cost = BUILDING_COSTS.get(building.building_type, 250)
+        refund = max(1, int((cost * building.hp) // (2 * building.max_hp)))
+        building.hp = 0
+        self.buildings.remove(building)
+        self.add_credits(building.house, refund)
+        return refund
+
+        self.credits[house] = self.credits.get(house, 0) + int(amount)
+        return self.credits[house]
+
     def power_balance(self, house: str) -> Tuple[int, int]:
         produced = sum(b.power_produced for b in self.buildings if b.house == house and b.hp > 0)
         consumed = sum(b.power_consumed for b in self.buildings if b.house == house and b.hp > 0)
