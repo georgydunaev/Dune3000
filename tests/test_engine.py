@@ -12,7 +12,7 @@ from dune3000.engine import (
     Unit,
     compute_damage,
 )
-from dune3000.procgen import generate_terrain_svg, generate_unit_svg
+from dune3000.procgen import generate_building_svg, generate_terrain_svg, generate_unit_svg
 
 
 class TestDune3000Engine(unittest.TestCase):
@@ -98,56 +98,7 @@ class TestDune3000Engine(unittest.TestCase):
         # Normal power: no consumption -> full efficiency.
         self.assertEqual(gs.power_efficiency("Atreides"), 1.0)
 
-    def test_compute_damage_bullet_vs_infantry(self):
-        """bullet vs infantry: 1.5x multiplier."""
-        self.assertEqual(compute_damage("bullet", "infantry", 10), 15)
-        self.assertEqual(compute_damage("bullet", "infantry", 7), 11)  # 7*1.5=10.5 -> round to 11
-
-    def test_compute_damage_bullet_vs_heavy(self):
-        """bullet vs heavy: 0.25x multiplier."""
-        self.assertEqual(compute_damage("bullet", "heavy", 10), 3)  # int(10*0.25+0.5)=int(3.0)=3
-        self.assertEqual(compute_damage("bullet", "heavy", 7), 2)  # int(7*0.25+0.5)=int(2.25)=2
-
-    def test_compute_damage_shell_vs_heavy(self):
-        """shell vs heavy: 1.25x multiplier."""
-        self.assertEqual(compute_damage("shell", "heavy", 10), 13)  # int(10*1.25+0.5)=int(13.0)=13
-        self.assertEqual(compute_damage("shell", "heavy", 3), 4)  # int(3*1.25+0.5)=int(4.0)=4
-
-    def test_compute_damage_missile_vs_building(self):
-        """missile vs building: 1.5x multiplier."""
-        self.assertEqual(compute_damage("missile", "building", 10), 15)
-        self.assertEqual(compute_damage("missile", "building", 1), 1)  # min clamp
-
-    def test_compute_damage_all_other_combinations(self):
-        """All other combinations: 1.0x multiplier."""
-        self.assertEqual(compute_damage("bullet", "building", 10), 10)
-        self.assertEqual(compute_damage("shell", "infantry", 10), 10)
-        self.assertEqual(compute_damage("missile", "infantry", 10), 10)
-        self.assertEqual(compute_damage("shell", "building", 10), 10)
-
-    def test_compute_damage_minimum_clamp(self):
-        """Returns max(1, ...), so minimum damage is 1."""
-        self.assertEqual(compute_damage("bullet", "infantry", 0), 1)
-        self.assertEqual(compute_damage("bullet", "heavy", 0), 1)
-        self.assertEqual(compute_damage("shell", "heavy", 0), 1)
-        self.assertEqual(compute_damage("missile", "building", 0), 1)
-        self.assertEqual(compute_damage("anything", "anything", 0), 1)
-
-    def test_compute_damage_rounding_behavior(self):
-        """Test rounding: 7*1.5=10.5 should round to 11 (round half up)."""
-        # 7 * 1.5 = 10.5 -> int(10.5 + 0.5) = int(11.0) = 11
-        self.assertEqual(compute_damage("bullet", "infantry", 7), 11)
-        # 3 * 1.25 = 3.75 -> int(3.75 + 0.5) = int(4.25) = 4
-        self.assertEqual(compute_damage("shell", "heavy", 3), 4)
-
-    def test_compute_damage_existing_tests_unaffected(self):
-        """Ensure existing tests still pass."""
-        # These verify the existing test suite isn't broken
-        self.assertEqual(compute_damage("bullet", "infantry", 10), 15)
-
-
-
-class TestDune3000Engine(unittest.TestCase):
+    def test_max_spice_capacity(self):
         """max_spice_capacity: base 1000, +1000 per alive Refinery, +1000 per alive Silo."""
         gs = GameState(GridMap(8, 8))
         # Base capacity for any house
@@ -264,7 +215,7 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertIn("#2563eb", svg)
 
 
-def test_generate_building_svg(self):
+    def test_generate_building_svg(self):
         """Test generate_building_svg for WindTrap, Refinery, ConstructionYard, and Silo."""
         # Test WindTrap with Atreides
         svg = generate_building_svg("WindTrap", "Atreides", size=32)

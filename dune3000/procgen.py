@@ -78,8 +78,8 @@ def generate_building_svg(building_type: str, house: str, size: int = 32) -> str
         # Tall rectangle with a cap for Silo
         return (
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">'
-            f'<rect x="quarter" y="quarter" width="size - 2 * quarter" height="size - 3 * quarter" fill="{color}"/>'
-            f'<rect x="half - 4" y="quarter" width="8" height="size - 3 * quarter" fill="#1c1c1c"/>'
+            f'<rect x="{quarter}" y="{quarter}" width="{size - 2 * quarter}" height="{size - 3 * quarter}" fill="{color}"/>'
+            f'<rect x="{half - 4}" y="{quarter}" width="8" height="{size - 3 * quarter}" fill="#1c1c1c"/>'
             f'</svg>'
         )
     else:
