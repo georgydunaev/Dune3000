@@ -1,5 +1,6 @@
 import unittest
 from dune3000.engine import (
+    BUILDING_COSTS,
     CONCRETE,
     DUNES,
     HOUSE_SPECIAL_UNITS,
@@ -1058,6 +1059,59 @@ class TestDune3000Engine(unittest.TestCase):
         gs.credits["Atreides"] = 50
         unit_fail = gs.order_starport_unit("Atreides", "CombatTank", 5, 5)
         self.assertIsNone(unit_fail)
+
+
+    def test_fire_death_hand(self):
+        """test_fire_death_hand: Palace required, splash damage at dist 0/1, friendlies unharmed."""
+        # Test 1: Without a Palace, fire_death_hand returns 0 and deals no damage.
+        gs = GameState(GridMap(8, 8))
+        enemy = Unit("Trike", "Harkonnen", 4, 4, hp=100)
+        gs.units.append(enemy)
+        result = gs.fire_death_hand("Atreides", 4, 4)
+        self.assertEqual(result, 0)
+        self.assertEqual(enemy.hp, 100)
+
+        # Dead Palace does not count.
+        gs2 = GameState(GridMap(8, 8))
+        gs2.buildings.append(Building("Palace", "Atreides", 0, 0, hp=0))
+        enemy2 = Unit("Trike", "Harkonnen", 4, 4, hp=100)
+        gs2.units.append(enemy2)
+        result2 = gs2.fire_death_hand("Atreides", 4, 4)
+        self.assertEqual(result2, 0)
+        self.assertEqual(enemy2.hp, 100)
+
+        # Test 2: With an alive Palace, dist 0 -> 150, dist 1 -> 75, friendlies unharmed.
+        gs3 = GameState(GridMap(8, 8))
+        gs3.buildings.append(Building("Palace", "Atreides", 0, 0))
+        enemy_center = Unit("Trike", "Harkonnen", 4, 4, hp=200)
+        enemy_adjacent = Unit("Trike", "Ordos", 5, 4, hp=200)
+        enemy_far = Unit("Trike", "Harkonnen", 6, 4, hp=200)
+        friendly = Unit("Trike", "Atreides", 4, 4, hp=100)
+        enemy_building_center = Building("Barracks", "Harkonnen", 4, 4, hp=400, max_hp=400)
+        gs3.units.extend([enemy_center, enemy_adjacent, enemy_far, friendly])
+        gs3.buildings.append(enemy_building_center)
+
+        result3 = gs3.fire_death_hand("Atreides", 4, 4)
+        # dist 0: enemy_center 150 + friendly excluded + enemy_building_center 150 = 300
+        # dist 1: enemy_adjacent 75 = 75; enemy_far at dist 2: unaffected
+        self.assertEqual(result3, 375)
+        self.assertEqual(enemy_center.hp, 50)      # 200 - 150
+        self.assertEqual(enemy_adjacent.hp, 125)   # 200 - 75
+        self.assertEqual(enemy_far.hp, 200)        # dist 2, unaffected
+        self.assertEqual(friendly.hp, 100)         # friendly, unharmed
+        self.assertEqual(enemy_building_center.hp, 250)  # 400 - 150
+
+        # Test 3: Damage is clamped to target's current HP.
+        gs4 = GameState(GridMap(8, 8))
+        gs4.buildings.append(Building("Palace", "Harkonnen", 0, 0))
+        weak = Unit("Trike", "Atreides", 3, 3, hp=30)
+        gs4.units.append(weak)
+        result4 = gs4.fire_death_hand("Harkonnen", 3, 3)
+        self.assertEqual(result4, 30)  # min(30, 150)
+        self.assertEqual(weak.hp, 0)
+
+        # Test 4: BUILDING_COSTS includes Palace at 600.
+        self.assertEqual(BUILDING_COSTS.get("Palace"), 600)
 
 
 if __name__ == "__main__":
