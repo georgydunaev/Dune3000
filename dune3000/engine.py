@@ -156,3 +156,28 @@ class GameState:
             building.hp = max(1, building.max_hp // 2)
         self.buildings.append(building)
         return building
+
+
+def compute_damage(weapon_type: str, armor_type: str, base_damage: int) -> int:
+    """Compute damage with Rock-Paper-Scissors weapon vs armor multipliers.
+
+    Multipliers:
+        bullet vs infantry: 1.5
+        bullet vs heavy: 0.25
+        shell vs heavy: 1.25
+        missile vs building: 1.5
+    All other combinations: 1.0
+
+    Returns max(1, int(round(base_damage * multiplier))).
+    Uses standard mathematical rounding (round half up).
+    """
+    multipliers = {
+        ("bullet", "infantry"): 1.5,
+        ("bullet", "heavy"): 0.25,
+        ("shell", "heavy"): 1.25,
+        ("missile", "building"): 1.5,
+    }
+    multiplier = multipliers.get((weapon_type, armor_type), 1.0)
+    # Standard rounding: add 0.5 and truncate for positive values
+    result = int(base_damage * multiplier + 0.5)
+    return max(1, result)

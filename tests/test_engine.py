@@ -10,6 +10,7 @@ from dune3000.engine import (
     GridMap,
     Sandworm,
     Unit,
+    compute_damage,
 )
 from dune3000.procgen import generate_terrain_svg, generate_unit_svg
 
@@ -97,7 +98,56 @@ class TestDune3000Engine(unittest.TestCase):
         # Normal power: no consumption -> full efficiency.
         self.assertEqual(gs.power_efficiency("Atreides"), 1.0)
 
-    def test_max_spice_capacity(self):
+    def test_compute_damage_bullet_vs_infantry(self):
+        """bullet vs infantry: 1.5x multiplier."""
+        self.assertEqual(compute_damage("bullet", "infantry", 10), 15)
+        self.assertEqual(compute_damage("bullet", "infantry", 7), 11)  # 7*1.5=10.5 -> round to 11
+
+    def test_compute_damage_bullet_vs_heavy(self):
+        """bullet vs heavy: 0.25x multiplier."""
+        self.assertEqual(compute_damage("bullet", "heavy", 10), 3)  # int(10*0.25+0.5)=int(3.0)=3
+        self.assertEqual(compute_damage("bullet", "heavy", 7), 2)  # int(7*0.25+0.5)=int(2.25)=2
+
+    def test_compute_damage_shell_vs_heavy(self):
+        """shell vs heavy: 1.25x multiplier."""
+        self.assertEqual(compute_damage("shell", "heavy", 10), 13)  # int(10*1.25+0.5)=int(13.0)=13
+        self.assertEqual(compute_damage("shell", "heavy", 3), 4)  # int(3*1.25+0.5)=int(4.0)=4
+
+    def test_compute_damage_missile_vs_building(self):
+        """missile vs building: 1.5x multiplier."""
+        self.assertEqual(compute_damage("missile", "building", 10), 15)
+        self.assertEqual(compute_damage("missile", "building", 1), 1)  # min clamp
+
+    def test_compute_damage_all_other_combinations(self):
+        """All other combinations: 1.0x multiplier."""
+        self.assertEqual(compute_damage("bullet", "building", 10), 10)
+        self.assertEqual(compute_damage("shell", "infantry", 10), 10)
+        self.assertEqual(compute_damage("missile", "infantry", 10), 10)
+        self.assertEqual(compute_damage("shell", "building", 10), 10)
+
+    def test_compute_damage_minimum_clamp(self):
+        """Returns max(1, ...), so minimum damage is 1."""
+        self.assertEqual(compute_damage("bullet", "infantry", 0), 1)
+        self.assertEqual(compute_damage("bullet", "heavy", 0), 1)
+        self.assertEqual(compute_damage("shell", "heavy", 0), 1)
+        self.assertEqual(compute_damage("missile", "building", 0), 1)
+        self.assertEqual(compute_damage("anything", "anything", 0), 1)
+
+    def test_compute_damage_rounding_behavior(self):
+        """Test rounding: 7*1.5=10.5 should round to 11 (round half up)."""
+        # 7 * 1.5 = 10.5 -> int(10.5 + 0.5) = int(11.0) = 11
+        self.assertEqual(compute_damage("bullet", "infantry", 7), 11)
+        # 3 * 1.25 = 3.75 -> int(3.75 + 0.5) = int(4.25) = 4
+        self.assertEqual(compute_damage("shell", "heavy", 3), 4)
+
+    def test_compute_damage_existing_tests_unaffected(self):
+        """Ensure existing tests still pass."""
+        # These verify the existing test suite isn't broken
+        self.assertEqual(compute_damage("bullet", "infantry", 10), 15)
+
+
+
+class TestDune3000Engine(unittest.TestCase):
         """max_spice_capacity: base 1000, +1000 per alive Refinery, +1000 per alive Silo."""
         gs = GameState(GridMap(8, 8))
         # Base capacity for any house
@@ -143,6 +193,51 @@ class TestDune3000Engine(unittest.TestCase):
         small.buildings.append(Building("Refinery", "Harkonnen", 2, 2, power_consumed=300))
         self.assertEqual(small.power_efficiency("Harkonnen"), 0.3333)
 
+    def test_compute_damage_bullet_vs_infantry(self):
+        """bullet vs infantry: 1.5x multiplier."""
+        result = compute_damage("bullet", "infantry", 10)
+        self.assertEqual(result, 15)
+
+    def test_compute_damage_bullet_vs_heavy(self):
+        """bullet vs heavy: 0.25x multiplier."""
+        result = compute_damage("bullet", "heavy", 10)
+        self.assertEqual(result, 3)  # int(round(10 * 0.25)) = int(round(2.5)) = 3
+
+    def test_compute_damage_shell_vs_heavy(self):
+        """shell vs heavy: 1.25x multiplier."""
+        result = compute_damage("shell", "heavy", 10)
+        self.assertEqual(result, 13)  # int(round(10 * 1.25)) = int(round(12.5)) = 13
+
+    def test_compute_damage_missile_vs_building(self):
+        """missile vs building: 1.5x multiplier."""
+        result = compute_damage("missile", "building", 10)
+        self.assertEqual(result, 15)
+
+    def test_compute_damage_all_other_combinations(self):
+        """All other combinations default to 1.0 multiplier."""
+        result = compute_damage("shell", "infantry", 10)
+        self.assertEqual(result, 10)  # int(round(10 * 1.0)) = 10
+        result = compute_damage("missile", "infantry", 10)
+        self.assertEqual(result, 10)
+        result = compute_damage("bullet", "building", 10)
+        self.assertEqual(result, 10)
+
+    def test_compute_damage_minimum_one(self):
+        """Return max(1, ...) ensures at least 1 damage."""
+        result = compute_damage("bullet", "heavy", 1)
+        self.assertEqual(result, 1)  # max(1, int(round(1 * 0.25))) = max(1, 0) = 1
+        result = compute_damage("missile", "building", 1)
+        self.assertEqual(result, 2)  # max(1, int(round(1 * 1.5))) = max(1, 2) = 2
+
+    def test_compute_damage_rounding_behavior(self):
+        """Test rounding behavior with various base damages."""
+        # base_damage=7, multiplier=1.5 -> 7*1.5=10.5 -> round=11 -> max(1,11)=11
+        result = compute_damage("bullet", "infantry", 7)
+        self.assertEqual(result, 11)
+        # base_damage=3, multiplier=0.25 -> 3*0.25=0.75 -> round=1 -> max(1,1)=1
+        result = compute_damage("bullet", "heavy", 3)
+        self.assertEqual(result, 1)
+
     def test_generate_unit_svg(self):
         """Test generate_unit_svg for Harvester, Trike, and CombatTank."""
         # Test Harvester with Atreides
@@ -167,6 +262,43 @@ class TestDune3000Engine(unittest.TestCase):
         svg = generate_unit_svg("Harvester", "UnknownHouse", size=32)
         self.assertIn("<svg", svg)
         self.assertIn("#2563eb", svg)
+
+
+def test_generate_building_svg(self):
+        """Test generate_building_svg for WindTrap, Refinery, ConstructionYard, and Silo."""
+        # Test WindTrap with Atreides
+        svg = generate_building_svg("WindTrap", "Atreides", size=32)
+        self.assertIn("<svg", svg)
+        self.assertIn("#2563eb", svg)
+        self.assertIn("polygon", svg)
+
+        # Test Refinery with Harkonnen
+        svg = generate_building_svg("Refinery", "Harkonnen", size=32)
+        self.assertIn("<svg", svg)
+        self.assertIn("#dc2626", svg)
+        self.assertIn("rect", svg)
+
+        # Test ConstructionYard with Ordos
+        svg = generate_building_svg("ConstructionYard", "Ordos", size=32)
+        self.assertIn("<svg", svg)
+        self.assertIn("#16a34a", svg)
+        self.assertIn("rect", svg)
+
+        # Test Silo with Atreides
+        svg = generate_building_svg("Silo", "Atreides", size=32)
+        self.assertIn("<svg", svg)
+        self.assertIn("#2563eb", svg)
+        self.assertIn("rect", svg)
+
+        # Test with default house color (unknown house) for WindTrap
+        svg = generate_building_svg("WindTrap", "UnknownHouse", size=32)
+        self.assertIn("<svg", svg)
+        self.assertIn("#2563eb", svg)
+
+        # Verify determinism: same inputs produce same output
+        svg1 = generate_building_svg("Refinery", "Atreides", size=32)
+        svg2 = generate_building_svg("Refinery", "Atreides", size=32)
+        self.assertEqual(svg1, svg2)
 
 
 if __name__ == "__main__":
