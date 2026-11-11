@@ -203,6 +203,7 @@ class Unit:
         target_armor = getattr(target, "armor_type", "building")
         dmg = compute_damage(self.weapon_type, target_armor, self.attack_damage)
         target.hp = max(0, target.hp - dmg)
+        self.gain_xp(dmg)
         return dmg
 
 
@@ -301,6 +302,47 @@ class GameState:
         return produced, consumed
 
     def power_efficiency(self, house: str) -> float:
+        produced, consumed = self.power_balance(house)
+        if consumed <= 0 or produced >= consumed:
+            return 1.0
+        return max(0.25, round(produced / consumed, 4))
+
+    def step_turrets(self) -> int:
+        """Process turret fire for all alive buildings.
+
+        Gun Turrets (short range, works even on low power): range 3, damage 30.
+        Rocket Turrets (long range, requires full power efficiency >= 1.0): range 5, damage 45.
+
+        Returns total damage dealt this tick.
+        """
+        total_damage: int = 0
+        for b in self.buildings:
+            if b.hp <= 0:
+                continue
+            if b.building_type == "GunTurret":
+                rng: int = 3
+                dmg: int = 30
+            elif b.building_type == "RocketTurret":
+                if self.power_efficiency(b.house) < 1.0:
+                    continue
+                rng: int = 5
+                dmg: int = 45
+            else:
+                continue
+            # Find first alive enemy unit in range
+            for u in self.units:
+                if u.hp <= 0:
+                    continue
+                if u.house == b.house:
+                    continue
+                if abs(u.x - b.x) + abs(u.y - b.y) <= rng:
+                    actual: int = min(u.hp, dmg)
+                    u.hp -= actual
+                    total_damage += actual
+                    break
+        return total_damage
+
+    def compute_visibility(self, house: str) -> set:
         produced, consumed = self.power_balance(house)
         if consumed <= 0 or produced >= consumed:
             return 1.0

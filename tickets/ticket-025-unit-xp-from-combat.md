@@ -1,6 +1,6 @@
 # Ticket 025: Unit XP from Combat Experience
 
-**State:** open
+**State:** closed
 **Labels:** dune3000, gameplay, mechanics
 
 ## Acceptance Criteria

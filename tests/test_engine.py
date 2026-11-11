@@ -1318,6 +1318,33 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertFalse(gs.sabotage(sab2, enemy_dead_b))
         self.assertEqual(sab2.hp, 45)
 
+    def test_unit_xp_from_attack(self):
+        """test_unit_xp_from_attack: attacker gains XP equal to dmg, rank promotion at thresholds."""
+        gs = GameState(GridMap(8, 8))
+        attacker = Unit("Trike", "Atreides", 1, 1, hp=50)
+        target = Unit("Trike", "Harkonnen", 1, 2, hp=50)
+        gs.units.extend([attacker, target])
+
+        # Attack with bullet vs heavy: 20 * 0.25 = 5 damage
+        dmg = attacker.attack(target)
+        self.assertEqual(dmg, 5)
+        self.assertEqual(target.hp, 45)
+        self.assertEqual(attacker.xp, 5)
+
+        # Out-of-range attack gains 0 XP
+        far_target = Unit("Trike", "Harkonnen", 7, 7, hp=50)
+        gs.units.append(far_target)
+        dmg_miss = attacker.attack(far_target)
+        self.assertEqual(dmg_miss, 0)
+        self.assertEqual(attacker.xp, 5)
+
+        # Rank promotion via combat XP: give attacker 95 XP, next hit gives 5 XP -> total 105 -> rank 1
+        attacker.xp = 95
+        dmg2 = attacker.attack(target)
+        self.assertEqual(dmg2, 5)
+        self.assertEqual(attacker.xp, 100)
+        self.assertEqual(attacker.rank, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
