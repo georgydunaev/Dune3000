@@ -6,78 +6,196 @@
   <style>
     * { box-sizing: border-box; }
     body {
-      background: #141318;
-      color: #e2e8f0;
-      font-family: monospace;
+      background: #0f1015;
+      color: #cbd5e1;
+      font-family: 'Consolas', 'Menlo', 'Monaco', monospace;
       margin: 0;
       padding: 16px 24px;
       width: 100%;
     }
-    h2 { margin: 0 0 8px 0; color: #f59e0b; }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 8px;
+    }
+    h2 {
+      margin: 0;
+      color: #f59e0b;
+      letter-spacing: 1px;
+      font-size: 20px;
+    }
+    .badge {
+      background: #1e293b;
+      color: #94a3b8;
+      font-size: 11px;
+      padding: 3px 8px;
+      border: 1px solid #475569;
+      border-radius: 3px;
+    }
     #hud {
       display: flex;
       flex-wrap: wrap;
-      gap: 18px;
+      gap: 16px;
       align-items: center;
-      background: #1e2028;
-      border: 1px solid #3f4454;
-      padding: 10px 14px;
-      margin-bottom: 10px;
-      font-size: 14px;
+      background: #151821;
+      border: 1px solid #2e384d;
+      border-left: 4px solid #f59e0b;
+      padding: 10px 16px;
+      margin-bottom: 12px;
+      font-size: 13px;
     }
-    .hud-stat { font-weight: bold; color: #93c5fd; }
+    .hud-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .hud-label { color: #64748b; font-size: 11px; text-transform: uppercase; }
+    .hud-stat { font-weight: bold; color: #38bdf8; }
+    .hud-house-atr { color: #60a5fa; font-weight: bold; }
+    .hud-house-har { color: #f87171; font-weight: bold; }
     #controls {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
+      background: #151821;
+      padding: 10px;
+      border: 1px solid #2e384d;
     }
     button {
-      background: #272a36;
+      background: #1e2433;
       color: #e2e8f0;
-      border: 1px solid #5c6370;
-      padding: 6px 12px;
-      font-family: monospace;
-      font-size: 13px;
+      border: 1px solid #3b4252;
+      padding: 7px 12px;
+      font-family: inherit;
+      font-size: 12px;
       cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
     }
-    button:hover { background: #3b4052; }
-    button.active { background: #2563eb; border-color: #93c5fd; color: #ffffff; }
+    button:hover {
+      background: #2b3347;
+      border-color: #60a5fa;
+      color: #ffffff;
+    }
+    button.active {
+      background: #1d4ed8;
+      border-color: #93c5fd;
+      color: #ffffff;
+      box-shadow: 0 0 8px rgba(37, 99, 235, 0.5);
+    }
+    button.btn-special {
+      border-color: #f59e0b;
+      color: #fbbf24;
+    }
+    button.btn-special:hover {
+      background: #78350f;
+    }
     #main-area {
       display: flex;
       gap: 16px;
       align-items: flex-start;
       flex-wrap: wrap;
     }
-    canvas {
-      border: 2px solid #5c6370;
-      background: #e5c07b;
+    #canvas-container {
+      position: relative;
+      border: 2px solid #334155;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+      background: #111;
+      width: 512px;
+      height: 512px;
+    }
+    canvas#gameCanvas {
+      display: block;
       image-rendering: pixelated;
       cursor: crosshair;
     }
-    #log-panel {
-      width: 340px;
-      height: 512px;
-      background: #1a1b22;
-      border: 1px solid #3f4454;
-      padding: 10px;
-      overflow-y: auto;
-      font-size: 12px;
-      line-height: 1.45;
+    #sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 320px;
     }
-    .log-entry { margin-bottom: 4px; border-bottom: 1px dashed #2a2d3a; padding-bottom: 2px; }
+    .panel-box {
+      background: #151821;
+      border: 1px solid #2e384d;
+      padding: 10px;
+    }
+    .panel-header {
+      font-size: 11px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #222938;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #radar-canvas {
+      display: block;
+      margin: 0 auto;
+      border: 1px solid #334155;
+      background: #090d14;
+    }
+    #log-panel {
+      height: 290px;
+      background: #0c0e14;
+      border: 1px solid #1e2433;
+      padding: 8px 10px;
+      overflow-y: auto;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .log-entry {
+      margin-bottom: 4px;
+      border-bottom: 1px solid #161b26;
+      padding-bottom: 2px;
+      color: #94a3b8;
+    }
+    .log-entry.log-combat { color: #f87171; }
+    .log-entry.log-economy { color: #fbbf24; }
+    .log-entry.log-worm { color: #fb923c; font-weight: bold; }
+    .log-entry.log-sys { color: #38bdf8; }
   </style>
 </head>
 <body>
-  <h2>Dune 3000 - Algorithmic Graphics RTS</h2>
+  <header>
+    <h2>Dune 3000: Arrakis Tactical Command</h2>
+    <span class="badge">Procedural Canvas v2.0</span>
+  </header>
+
   <div id="hud">
-    <span>House: <strong style="color:#3b82f6">Atreides</strong> vs <strong style="color:#ef4444">Harkonnen</strong></span>
-    <span>Credits: <span id="hud-credits" class="hud-stat">1000</span> / <span id="hud-capacity">2000</span></span>
-    <span>Power: <span id="hud-power" class="hud-stat">100 / 30 (100%)</span></span>
-    <span>Tick: <span id="hud-tick" class="hud-stat">0</span></span>
-    <span>Status: <span id="hud-status" class="hud-stat">Battle Active</span></span>
-    <span>Opponent: <span id="hud-opponent" class="hud-stat">Script AI</span></span>
+    <div class="hud-group">
+      <span class="hud-label">Conflict:</span>
+      <span class="hud-house-atr">Atreides</span> vs <span class="hud-house-har">Harkonnen</span>
+    </div>
+    <div class="hud-group">
+      <span class="hud-label">Credits:</span>
+      <span id="hud-credits" class="hud-stat">1000</span> / <span id="hud-capacity">2000</span>
+    </div>
+    <div class="hud-group">
+      <span class="hud-label">Power:</span>
+      <span id="hud-power" class="hud-stat">100 / 30 (100%)</span>
+    </div>
+    <div class="hud-group">
+      <span class="hud-label">Cycle:</span>
+      <span id="hud-tick" class="hud-stat">0</span>
+    </div>
+    <div class="hud-group">
+      <span class="hud-label">Condition:</span>
+      <span id="hud-status" class="hud-stat" style="color:#22c55e">Battle Active</span>
+    </div>
+    <div class="hud-group">
+      <span class="hud-label">Opponent:</span>
+      <span id="hud-opponent" class="hud-stat">Script AI</span>
+    </div>
   </div>
+
   <div id="controls">
     <button id="btn-select-mode" class="active" onclick="setMode('select')">Select / Command Unit</button>
     <button id="btn-build-concrete" onclick="setMode('Concrete')">Place Concrete (50)</button>
@@ -89,33 +207,146 @@
     <button id="btn-train-tank" onclick="trainUnit('CombatTank', 300)">Train CombatTank (300)</button>
     <button id="btn-step-tick" onclick="stepTick()">Step Tick</button>
     <button id="btn-autoplay" onclick="toggleAutoplay()">Auto-Play: ON</button>
-    <button id="btn-gpu" onclick="toggleGpuMode()" title="Opponent (Harkonnen) is commanded by the local LLM on the GPU; falls back to the script AI if the GPU is busy or offline">Play against GPU: OFF</button>
+    <button id="btn-gpu" class="btn-special" onclick="toggleGpuMode()" title="Opponent (Harkonnen) is commanded by the local LLM on the GPU; falls back to script AI if busy">Play against GPU: OFF</button>
+    <button id="btn-sound" onclick="toggleSound()">Sound: ON</button>
   </div>
+
   <div id="main-area">
-    <canvas id="gameCanvas" width="512" height="512"></canvas>
-    <div id="log-panel"></div>
+    <div id="canvas-container">
+      <canvas id="gameCanvas" width="512" height="512"></canvas>
+    </div>
+    <div id="sidebar">
+      <div class="panel-box">
+        <div class="panel-header">
+          <span>Tactical Radar Outpost</span>
+          <span id="radar-status" style="color:#22c55e">ONLINE</span>
+        </div>
+        <canvas id="radar-canvas" width="160" height="160"></canvas>
+      </div>
+      <div class="panel-box">
+        <div class="panel-header">
+          <span>Arrakis Command Log</span>
+          <span style="font-size:10px; color:#64748b">Live Feeds</span>
+        </div>
+        <div id="log-panel"></div>
+      </div>
+    </div>
   </div>
+
   <script>
+    /* =========================================================================
+       AUDIO SYNTHESIS SYSTEM (Web Audio API - Zero Token / Zero Asset Cost)
+       ========================================================================= */
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    let soundEnabled = true;
+
+    function initAudio() {
+      if (!audioCtx && AudioContextClass) {
+        audioCtx = new AudioContextClass();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('btn-sound').textContent = 'Sound: ' + (soundEnabled ? 'ON' : 'OFF');
+      if (soundEnabled) initAudio();
+    }
+
+    function playSound(type) {
+      if (!soundEnabled) return;
+      initAudio();
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+
+      if (type === 'click') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(650, now);
+        osc.frequency.exponentialRampToValueAtTime(300, now + 0.04);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(now); osc.stop(now + 0.04);
+      } else if (type === 'cannon') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.exponentialRampToValueAtTime(35, now + 0.18);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(now); osc.stop(now + 0.18);
+      } else if (type === 'worm') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(50, now);
+        osc.frequency.linearRampToValueAtTime(80, now + 0.3);
+        osc.frequency.exponentialRampToValueAtTime(25, now + 0.6);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(now); osc.stop(now + 0.6);
+      } else if (type === 'build') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.setValueAtTime(330, now + 0.06);
+        osc.frequency.setValueAtTime(440, now + 0.12);
+        gain.gain.setValueAtTime(0.07, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(now); osc.stop(now + 0.22);
+      } else if (type === 'harvest') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.linearRampToValueAtTime(520, now + 0.15);
+        gain.gain.setValueAtTime(0.06, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(now); osc.stop(now + 0.15);
+      }
+    }
+
+    /* =========================================================================
+       GAME STATE & CONFIGURATION
+       ========================================================================= */
     const TILE = 32, W = 16, H = 16;
-    const COLORS = {
-      SAND: '#e5c07b', DUNES: '#d19a66', ROCK: '#5c6370',
-      CONCRETE: '#9ca3af', SPICE_THIN: '#e06c75', SPICE_THICK: '#be5046',
-      Atreides: '#2563eb', Harkonnen: '#dc2626'
-    };
-    const BUILDING_COSTS = { Concrete: 50, WindTrap: 200, Refinery: 400, Silo: 150 };
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    const radarCanvas = document.getElementById('radar-canvas');
+    const radarCtx = radarCanvas.getContext('2d');
+
+    const HOUSE_COLORS = {
+      Atreides: { main: '#2563eb', dark: '#1d4ed8', light: '#60a5fa', glow: 'rgba(37,99,235,0.4)' },
+      Harkonnen: { main: '#dc2626', dark: '#991b1b', light: '#f87171', glow: 'rgba(220,38,38,0.4)' },
+      Ordos: { main: '#16a34a', dark: '#15803d', light: '#4ade80', glow: 'rgba(22,163,74,0.4)' }
+    };
+
+    const BUILDING_COSTS = { Concrete: 50, WindTrap: 200, Refinery: 400, Silo: 150 };
+
     let mode = 'select';
     let selectedUnit = null;
     let tickCount = 0;
     let credits = { Atreides: 1000, Harkonnen: 1000 };
+
     let tiles = Array.from({ length: H }, (_, y) =>
       Array.from({ length: W }, (_, x) => {
         if ((x < 5 && y < 5) || (x > 10 && y > 10)) return 'ROCK';
-        if ((x >= 6 && x <= 9 && y >= 5 && y <= 10)) return (x + y) % 2 === 0 ? 'SPICE_THICK' : 'SPICE_THIN';
+        if (x >= 6 && x <= 9 && y >= 5 && y <= 10) return (x + y) % 2 === 0 ? 'SPICE_THICK' : 'SPICE_THIN';
         return 'SAND';
       })
     );
+
     let buildings = [
       { type: 'ConstructionYard', house: 'Atreides', x: 1, y: 1, hp: 400, maxHp: 400, pProd: 50, pCons: 0 },
       { type: 'WindTrap', house: 'Atreides', x: 2, y: 1, hp: 400, maxHp: 400, pProd: 100, pCons: 0 },
@@ -123,23 +354,108 @@
       { type: 'ConstructionYard', house: 'Harkonnen', x: 14, y: 14, hp: 400, maxHp: 400, pProd: 50, pCons: 0 },
       { type: 'Refinery', house: 'Harkonnen', x: 13, y: 14, hp: 400, maxHp: 400, pProd: 0, pCons: 30 }
     ];
-    let units = [
-      { type: 'Harvester', house: 'Atreides', x: 3, y: 3, tx: 6, ty: 6, hp: 120, maxHp: 120, spice: 0, maxSpice: 700, dmg: 5, range: 1 },
-      { type: 'CombatTank', house: 'Atreides', x: 4, y: 2, tx: 4, ty: 2, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 25, range: 3 },
-      { type: 'Harvester', house: 'Harkonnen', x: 12, y: 12, tx: 9, ty: 9, hp: 120, maxHp: 120, spice: 0, maxSpice: 700, dmg: 5, range: 1 },
-      { type: 'CombatTank', house: 'Harkonnen', x: 11, y: 13, tx: 11, ty: 13, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 25, range: 3 }
-    ];
-    let sandworm = { x: 0, y: 14 };
 
-    function logMsg(msg) {
+    let units = [
+      { type: 'Harvester', house: 'Atreides', x: 3, y: 3, tx: 6, ty: 6, hp: 120, maxHp: 120, spice: 0, maxSpice: 700, dmg: 5, range: 1, angle: 0 },
+      { type: 'CombatTank', house: 'Atreides', x: 4, y: 2, tx: 4, ty: 2, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 25, range: 3, angle: 0 },
+      { type: 'Harvester', house: 'Harkonnen', x: 12, y: 12, tx: 9, ty: 9, hp: 120, maxHp: 120, spice: 0, maxSpice: 700, dmg: 5, range: 1, angle: Math.PI },
+      { type: 'CombatTank', house: 'Harkonnen', x: 11, y: 13, tx: 11, ty: 13, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 25, range: 3, angle: Math.PI }
+    ];
+
+    let sandworm = { x: 0, y: 14, segments: [{x:0, y:14}, {x:0, y:14}, {x:0, y:14}], mawOpen: 0 };
+
+    /* =========================================================================
+       PARTICLE & VISUAL EFFECTS SYSTEM
+       ========================================================================= */
+    const particles = [];
+
+    function addExplosion(x, y) {
+      playSound('cannon');
+      for (let i = 0; i < 18; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 1.0 + Math.random() * 3.5;
+        particles.push({
+          type: 'spark',
+          x: x * TILE + 16,
+          y: y * TILE + 16,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 25 + Math.floor(Math.random() * 20),
+          maxLife: 45,
+          color: Math.random() > 0.4 ? '#fbbf24' : '#ef4444',
+          size: 2 + Math.random() * 3
+        });
+      }
+      particles.push({
+        type: 'shockwave',
+        x: x * TILE + 16,
+        y: y * TILE + 16,
+        r: 4,
+        maxR: 24,
+        life: 14,
+        maxLife: 14
+      });
+    }
+
+    function addDust(x, y) {
+      particles.push({
+        type: 'dust',
+        x: x * TILE + 16 + (Math.random() * 8 - 4),
+        y: y * TILE + 16 + (Math.random() * 8 - 4),
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: -0.3 - Math.random() * 0.4,
+        life: 18,
+        maxLife: 18,
+        size: 3 + Math.random() * 3
+      });
+    }
+
+    function addTracer(x1, y1, x2, y2) {
+      particles.push({
+        type: 'tracer',
+        x1: x1 * TILE + 16,
+        y1: y1 * TILE + 16,
+        x2: x2 * TILE + 16,
+        y2: y2 * TILE + 16,
+        life: 6,
+        maxLife: 6
+      });
+    }
+
+    function updateParticles() {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.life--;
+        if (p.life <= 0) {
+          particles.splice(i, 1);
+          continue;
+        }
+        if (p.type === 'spark' || p.type === 'dust') {
+          p.x += p.vx;
+          p.y += p.vy;
+        } else if (p.type === 'shockwave') {
+          p.r += (p.maxR - p.r) * 0.2;
+        }
+      }
+    }
+
+    /* =========================================================================
+       LOGGING SYSTEM
+       ========================================================================= */
+    function logMsg(msg, category = 'sys') {
       const panel = document.getElementById('log-panel');
       const div = document.createElement('div');
-      div.className = 'log-entry';
-      div.textContent = `[T${tickCount}] ${msg}`;
+      div.className = `log-entry log-${category}`;
+      div.textContent = `[${tickCount.toString().padStart(4, '0')}] ${msg}`;
       panel.prepend(div);
+      while (panel.children.length > 50) {
+        panel.removeChild(panel.lastChild);
+      }
     }
 
     function setMode(m) {
+      initAudio();
+      playSound('click');
       mode = m;
       document.querySelectorAll('#controls button').forEach(b => b.classList.remove('active'));
       const mapBtn = {
@@ -158,45 +474,55 @@
     }
 
     function trainUnit(unitType, cost) {
-      if (credits.Atreides < cost) { logMsg(`Insufficient credits for ${unitType} (${cost}).`); return; }
+      initAudio();
+      if (credits.Atreides < cost) {
+        logMsg(`Insufficient credits for ${unitType} (${cost}).`, 'economy');
+        return;
+      }
       credits.Atreides -= cost;
+      playSound('build');
       const u = {
         type: unitType, house: 'Atreides', x: 2, y: 3, tx: 4, ty: 4,
         hp: unitType === 'CombatTank' ? 140 : 90, maxHp: unitType === 'CombatTank' ? 140 : 90,
         spice: 0, maxSpice: unitType === 'Harvester' ? 700 : 0,
         dmg: unitType === 'CombatTank' ? 25 : (unitType === 'Trike' ? 15 : 5),
-        range: unitType === 'CombatTank' ? 3 : 2
+        range: unitType === 'CombatTank' ? 3 : 2,
+        angle: 0
       };
       units.push(u);
       selectedUnit = u;
-      logMsg(`Trained Atreides ${unitType} at (2, 3).`);
-      render();
+      logMsg(`Trained Atreides ${unitType} at (2, 3).`, 'economy');
     }
 
     canvas.addEventListener('click', (e) => {
+      initAudio();
       const rect = canvas.getBoundingClientRect();
       const gx = Math.max(0, Math.min(W - 1, Math.floor((e.clientX - rect.left) / TILE)));
       const gy = Math.max(0, Math.min(H - 1, Math.floor((e.clientY - rect.top) / TILE)));
+
       if (mode === 'select') {
         const clicked = units.find(u => u.house === 'Atreides' && u.x === gx && u.y === gy);
         if (clicked) {
           selectedUnit = clicked;
-          logMsg(`Selected ${clicked.type} at (${gx}, ${gy}). Click any tile to move/attack.`);
+          playSound('click');
+          logMsg(`Selected ${clicked.type} at (${gx}, ${gy}). Click tile to order.`, 'sys');
         } else if (selectedUnit && selectedUnit.hp > 0) {
           selectedUnit.tx = gx;
           selectedUnit.ty = gy;
-          logMsg(`Ordered ${selectedUnit.type} to (${gx}, ${gy}).`);
+          playSound('click');
+          logMsg(`Ordered ${selectedUnit.type} to (${gx}, ${gy}).`, 'sys');
         }
       } else if (mode === 'Concrete') {
-        if (credits.Atreides < 50) { logMsg('Need 50 credits for Concrete.'); return; }
+        if (credits.Atreides < 50) { logMsg('Need 50 credits for Concrete.', 'economy'); return; }
         credits.Atreides -= 50;
         tiles[gy][gx] = 'CONCRETE';
-        logMsg(`Placed Concrete Slab at (${gx}, ${gy}).`);
+        playSound('build');
+        logMsg(`Placed Concrete Slab at (${gx}, ${gy}).`, 'economy');
         setMode('select');
       } else {
         const cost = BUILDING_COSTS[mode] || 200;
-        if (credits.Atreides < cost) { logMsg(`Need ${cost} credits for ${mode}.`); return; }
-        if (buildings.some(b => b.x === gx && b.y === gy)) { logMsg('Tile already occupied.'); return; }
+        if (credits.Atreides < cost) { logMsg(`Need ${cost} credits for ${mode}.`, 'economy'); return; }
+        if (buildings.some(b => b.x === gx && b.y === gy)) { logMsg('Tile already occupied.', 'sys'); return; }
         credits.Atreides -= cost;
         const onConcrete = tiles[gy][gx] === 'CONCRETE';
         const hp = onConcrete ? 400 : 200;
@@ -204,22 +530,32 @@
           type: mode, house: 'Atreides', x: gx, y: gy, hp, maxHp: 400,
           pProd: mode === 'WindTrap' ? 100 : 0, pCons: mode === 'WindTrap' ? 0 : 30
         });
-        logMsg(`Constructed ${mode} at (${gx}, ${gy}) [HP ${hp}/400].`);
+        playSound('build');
+        logMsg(`Constructed ${mode} at (${gx}, ${gy}) [HP ${hp}/400].`, 'economy');
         setMode('select');
       }
-      render();
     });
 
     function moveTowards(obj, tx, ty) {
+      const prevX = obj.x, prevY = obj.y;
       if (obj.x < tx) obj.x++;
       else if (obj.x > tx) obj.x--;
       else if (obj.y < ty) obj.y++;
       else if (obj.y > ty) obj.y--;
+
+      if (obj.x !== prevX || obj.y !== prevY) {
+        obj.angle = Math.atan2(obj.y - prevY, obj.x - prevX);
+        addDust(obj.x, obj.y);
+      }
     }
 
+    /* =========================================================================
+       GAME TICK EXECUTION
+       ========================================================================= */
     function stepTick() {
       tickCount++;
-      // Harvester AI & unit movement
+
+      // Unit movement & economy
       for (const u of units) {
         if (u.hp <= 0) continue;
         if (u.type === 'Harvester') {
@@ -229,13 +565,18 @@
           } else if (tiles[u.y][u.x] !== 'SPICE_THICK' && tiles[u.y][u.x] !== 'SPICE_THIN') {
             outer: for (let y = 0; y < H; y++) {
               for (let x = 0; x < W; x++) {
-                if (tiles[y][x] === 'SPICE_THICK' || tiles[y][x] === 'SPICE_THIN') { u.tx = x; u.ty = y; break outer; }
+                if (tiles[y][x] === 'SPICE_THICK' || tiles[y][x] === 'SPICE_THIN') {
+                  u.tx = x; u.ty = y;
+                  break outer;
+                }
               }
             }
           }
+
           if (ref && u.x === ref.x && u.y === ref.y && u.spice > 0) {
             credits[u.house] = Math.min(maxCapacity(u.house), credits[u.house] + u.spice);
-            logMsg(`${u.house} Harvester unloaded ${u.spice} spice.`);
+            playSound('harvest');
+            logMsg(`${u.house} Harvester deposited ${u.spice} Spice credits.`, 'economy');
             u.spice = 0;
           } else if (tiles[u.y][u.x] === 'SPICE_THICK') {
             u.spice = Math.min(u.maxSpice, u.spice + 100);
@@ -247,159 +588,636 @@
             moveTowards(u, u.tx, u.ty);
           }
         } else {
-          // Combat unit: attack nearest enemy in range or move toward target
+          // Combat unit AI
           const enemy = units.find(e => e.house !== u.house && e.hp > 0 && Math.abs(e.x - u.x) + Math.abs(e.y - u.y) <= u.range)
             || buildings.find(b => b.house !== u.house && b.hp > 0 && Math.abs(b.x - u.x) + Math.abs(b.y - u.y) <= u.range);
+
           if (enemy) {
             enemy.hp = Math.max(0, enemy.hp - u.dmg);
+            addTracer(u.x, u.y, enemy.x, enemy.y);
+            addExplosion(enemy.x, enemy.y);
+            logMsg(`${u.house} ${u.type} engaged target! (${u.dmg} damage)`, 'combat');
           } else {
             moveTowards(u, u.tx, u.ty);
           }
         }
       }
-      // Harkonnen: GPU LLM commander (every 6 ticks, never overlapping) or scripted AI
-      if (gpuMode && tickCount % 6 === 0) { requestGpuMove(); }
-      if (!gpuMode && tickCount % 8 === 0 && credits.Harkonnen >= 300) {
+
+      // Harkonnen Opponent
+      if (gpuMode && tickCount % 6 === 0) {
+        requestGpuMove();
+      } else if (!gpuMode && tickCount % 8 === 0 && credits.Harkonnen >= 300) {
         credits.Harkonnen -= 300;
-        units.push({ type: 'CombatTank', house: 'Harkonnen', x: 12, y: 13, tx: 2, ty: 2, hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 22, range: 3 });
-        logMsg('Harkonnen deployed a CombatTank!');
+        units.push({
+          type: 'CombatTank', house: 'Harkonnen', x: 12, y: 13, tx: 2, ty: 2,
+          hp: 140, maxHp: 140, spice: 0, maxSpice: 0, dmg: 22, range: 3, angle: Math.PI
+        });
+        playSound('build');
+        logMsg('Harkonnen deployed heavy CombatTank!', 'combat');
       }
-      // Sandworm hunts units on SAND/SPICE
+
+      // Sandworm behavior
       const prey = units.filter(u => u.hp > 0 && tiles[u.y][u.x] !== 'ROCK' && tiles[u.y][u.x] !== 'CONCRETE');
       if (prey.length > 0 && tickCount % 2 === 0) {
         prey.sort((a, b) => (Math.abs(a.x - sandworm.x) + Math.abs(a.y - sandworm.y)) - (Math.abs(b.x - sandworm.x) + Math.abs(b.y - sandworm.y)));
-        moveTowards(sandworm, prey[0].x, prey[0].y);
-        if (sandworm.x === prey[0].x && sandworm.y === prey[0].y) {
-          prey[0].hp = 0;
-          logMsg(`Sandworm devoured ${prey[0].house} ${prey[0].type}!`);
+        const target = prey[0];
+        
+        // Push previous segment positions
+        sandworm.segments.unshift({ x: sandworm.x, y: sandworm.y });
+        if (sandworm.segments.length > 4) sandworm.segments.pop();
+
+        moveTowards(sandworm, target.x, target.y);
+
+        if (sandworm.x === target.x && sandworm.y === target.y) {
+          target.hp = 0;
+          playSound('worm');
+          addExplosion(target.x, target.y);
+          logMsg(`WORM SIGN! Shai-Hulud devoured ${target.house} ${target.type}!`, 'worm');
         }
       }
+
       units = units.filter(u => u.hp > 0);
       buildings = buildings.filter(b => b.hp > 0);
-      render();
+      updateHud();
     }
 
-    function render() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (let y = 0; y < H; y++) {
-        for (let x = 0; x < W; x++) {
-          ctx.fillStyle = COLORS[tiles[y][x]] || COLORS.SAND;
-          ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
-          ctx.strokeStyle = 'rgba(0,0,0,0.12)';
-          ctx.strokeRect(x * TILE, y * TILE, TILE, TILE);
-        }
-      }
-      // Draw buildings
-      for (const b of buildings) {
-        ctx.fillStyle = COLORS[b.house] || '#2563eb';
-        ctx.fillRect(b.x * TILE + 3, b.y * TILE + 3, TILE - 6, TILE - 6);
-        ctx.strokeStyle = '#ffffff';
-        ctx.strokeRect(b.x * TILE + 3, b.y * TILE + 3, TILE - 6, TILE - 6);
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 10px monospace';
-        ctx.fillText(b.type.slice(0, 3).toUpperCase(), b.x * TILE + 5, b.y * TILE + 19);
-        ctx.fillStyle = '#22c55e';
-        ctx.fillRect(b.x * TILE + 3, b.y * TILE + 1, Math.floor((TILE - 6) * (b.hp / b.maxHp)), 2);
-      }
-      // Draw units
-      for (const u of units) {
-        const cx = u.x * TILE + TILE / 2, cy = u.y * TILE + TILE / 2;
-        ctx.fillStyle = COLORS[u.house] || '#2563eb';
-        ctx.beginPath();
-        if (u.type === 'Harvester') {
-          ctx.moveTo(cx, cy - 10); ctx.lineTo(cx + 10, cy); ctx.lineTo(cx, cy + 10); ctx.lineTo(cx - 10, cy);
-        } else if (u.type === 'Trike') {
-          ctx.moveTo(cx + 10, cy); ctx.lineTo(cx - 8, cy - 8); ctx.lineTo(cx - 8, cy + 8);
-        } else {
-          ctx.rect(cx - 9, cy - 9, 18, 18);
-        }
-        ctx.closePath();
-        ctx.fill();
-        if (selectedUnit === u) {
-          ctx.strokeStyle = '#facc15';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(u.x * TILE + 2, u.y * TILE + 2, TILE - 4, TILE - 4);
-          ctx.lineWidth = 1;
-        }
-      }
-      // Draw sandworm
-      ctx.strokeStyle = '#78350f';
-      ctx.fillStyle = '#b45309';
-      ctx.beginPath();
-      ctx.arc(sandworm.x * TILE + 16, sandworm.y * TILE + 16, 11, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      // Update HUD
+    function updateHud() {
       const pProd = buildings.filter(b => b.house === 'Atreides').reduce((s, b) => s + b.pProd, 0);
       const pCons = buildings.filter(b => b.house === 'Atreides').reduce((s, b) => s + b.pCons, 0);
       const eff = (pCons <= 0 || pProd >= pCons) ? 100 : Math.max(25, Math.round((pProd / pCons) * 100));
+
       document.getElementById('hud-credits').textContent = credits.Atreides;
       document.getElementById('hud-capacity').textContent = maxCapacity('Atreides');
       document.getElementById('hud-power').textContent = `${pProd} / ${pCons} (${eff}%)`;
       document.getElementById('hud-tick').textContent = tickCount;
+
       const atrAlive = buildings.some(b => b.house === 'Atreides') || units.some(u => u.house === 'Atreides');
       const harAlive = buildings.some(b => b.house === 'Harkonnen') || units.some(u => u.house === 'Harkonnen');
-      document.getElementById('hud-status').textContent = !harAlive ? 'Atreides Victory!' : (!atrAlive ? 'Harkonnen Victory!' : 'Battle Active');
+      const statElem = document.getElementById('hud-status');
+      if (!harAlive) {
+        statElem.textContent = 'Atreides Victory!';
+        statElem.style.color = '#38bdf8';
+      } else if (!atrAlive) {
+        statElem.textContent = 'Harkonnen Victory!';
+        statElem.style.color = '#f87171';
+      } else {
+        statElem.textContent = 'Battle Active';
+        statElem.style.color = '#22c55e';
+      }
     }
 
+    /* =========================================================================
+       HIGH-DETAIL PROCEDURAL GRAPHICS RENDERING ENGINE
+       ========================================================================= */
+    function renderTile(x, y, tileType, animTime) {
+      const px = x * TILE, py = y * TILE;
+
+      if (tileType === 'SAND') {
+        ctx.fillStyle = '#d4a359';
+        ctx.fillRect(px, py, TILE, TILE);
+        // Sand ripples
+        ctx.strokeStyle = '#c69348';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const o = (x * 7 + y * 13) % 8;
+        ctx.moveTo(px, py + 8 + o);
+        ctx.quadraticCurveTo(px + 16, py + 4 + o, px + 32, py + 10 + o);
+        ctx.moveTo(px, py + 20 + o);
+        ctx.quadraticCurveTo(px + 16, py + 24 + o, px + 32, py + 18 + o);
+        ctx.stroke();
+      } else if (tileType === 'ROCK') {
+        ctx.fillStyle = '#474c58';
+        ctx.fillRect(px, py, TILE, TILE);
+        // Rock facets & highlight
+        ctx.fillStyle = '#5a6170';
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + TILE, py);
+        ctx.lineTo(px + TILE - 4, py + 4);
+        ctx.lineTo(px + 4, py + 4);
+        ctx.closePath();
+        ctx.fill();
+        // Dark crack
+        ctx.strokeStyle = '#272a33';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(px + 6, py + 10);
+        ctx.lineTo(px + 16, py + 20);
+        ctx.lineTo(px + 26, py + 16);
+        ctx.stroke();
+      } else if (tileType === 'CONCRETE') {
+        ctx.fillStyle = '#838a96';
+        ctx.fillRect(px, py, TILE, TILE);
+        // 4 sub-slabs with seams
+        ctx.strokeStyle = '#383f4d';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(px + 16, py); ctx.lineTo(px + 16, py + 32);
+        ctx.moveTo(px, py + 16); ctx.lineTo(px + 32, py + 16);
+        ctx.stroke();
+        // Corner bolts
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(px + 2, py + 2, 2, 2);
+        ctx.fillRect(px + 28, py + 2, 2, 2);
+        ctx.fillRect(px + 2, py + 28, 2, 2);
+        ctx.fillRect(px + 28, py + 28, 2, 2);
+      } else if (tileType === 'SPICE_THIN') {
+        ctx.fillStyle = '#cb7536';
+        ctx.fillRect(px, py, TILE, TILE);
+        // Twinkling crystal facets
+        const spark = Math.sin(animTime * 0.005 + x * 2 + y * 3);
+        ctx.fillStyle = spark > 0.3 ? '#fef08a' : '#d97706';
+        ctx.fillRect(px + 8, py + 8, 3, 3);
+        ctx.fillRect(px + 22, py + 14, 2, 2);
+        ctx.fillRect(px + 12, py + 24, 3, 3);
+      } else if (tileType === 'SPICE_THICK') {
+        ctx.fillStyle = '#991b1b';
+        ctx.fillRect(px, py, TILE, TILE);
+        // Dense glowing spice field
+        const pulse = 0.5 + 0.5 * Math.sin(animTime * 0.008 + x + y);
+        ctx.fillStyle = `rgba(245, 158, 11, ${0.4 + pulse * 0.4})`;
+        ctx.fillRect(px + 4, py + 4, 24, 24);
+        // Crystal clusters
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(px + 10, py + 10, 4, 4);
+        ctx.fillRect(px + 18, py + 18, 5, 5);
+        ctx.fillRect(px + 6, py + 20, 3, 3);
+      }
+
+      // Subtle grid border
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(px, py, TILE, TILE);
+    }
+
+    function renderBuilding(b, animTime) {
+      const px = b.x * TILE, py = b.y * TILE;
+      const houseCol = HOUSE_COLORS[b.house] || HOUSE_COLORS.Atreides;
+
+      // Foundation base
+      ctx.fillStyle = '#232733';
+      ctx.fillRect(px + 2, py + 2, TILE - 4, TILE - 4);
+
+      if (b.type === 'ConstructionYard') {
+        // Multi-tier bunker
+        ctx.fillStyle = houseCol.dark;
+        ctx.fillRect(px + 4, py + 4, TILE - 8, TILE - 8);
+        ctx.fillStyle = houseCol.main;
+        ctx.fillRect(px + 7, py + 7, TILE - 14, TILE - 14);
+
+        // Hazard stripes on apron
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(px + 6, py + TILE - 7, 6, 2);
+        ctx.fillStyle = '#111';
+        ctx.fillRect(px + 12, py + TILE - 7, 6, 2);
+
+        // Rotating radar dish
+        const radarAngle = animTime * 0.003;
+        ctx.save();
+        ctx.translate(px + 16, py + 14);
+        ctx.rotate(radarAngle);
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 6, 0, Math.PI);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, 0); ctx.lineTo(0, -6);
+        ctx.stroke();
+        ctx.restore();
+
+      } else if (b.type === 'WindTrap') {
+        // Heavy aerodynamic housing
+        ctx.fillStyle = houseCol.dark;
+        ctx.fillRect(px + 4, py + 4, TILE - 8, TILE - 8);
+
+        // Circular turbine cowl
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(px + 16, py + 16, 9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = houseCol.light;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Spinning turbine blades
+        const fanAngle = animTime * 0.012;
+        ctx.save();
+        ctx.translate(px + 16, py + 16);
+        ctx.rotate(fanAngle);
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i++) {
+          ctx.rotate((Math.PI * 2) / 3);
+          ctx.beginPath();
+          ctx.moveTo(0, 0); ctx.lineTo(0, 7);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+      } else if (b.type === 'Refinery') {
+        // Industrial base
+        ctx.fillStyle = houseCol.dark;
+        ctx.fillRect(px + 4, py + 4, TILE - 8, TILE - 8);
+
+        // Twin distillation stacks
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(px + 6, py + 8, 8, 14);
+        ctx.fillRect(px + 18, py + 8, 8, 14);
+
+        // Stack rims
+        ctx.fillStyle = houseCol.main;
+        ctx.fillRect(px + 5, py + 6, 10, 3);
+        ctx.fillRect(px + 17, py + 6, 10, 3);
+
+        // Furnace glow
+        const glow = 0.5 + 0.5 * Math.sin(animTime * 0.01);
+        ctx.fillStyle = `rgba(249, 115, 22, ${0.4 + glow * 0.5})`;
+        ctx.fillRect(px + 11, py + 18, 10, 4);
+
+      } else if (b.type === 'Silo') {
+        // Cylindrical vat
+        ctx.fillStyle = houseCol.dark;
+        ctx.fillRect(px + 6, py + 5, 20, 22);
+
+        // Metallic bands
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(px + 6, py + 10, 20, 2);
+        ctx.fillRect(px + 6, py + 20, 20, 2);
+
+        // Spice level indicator
+        ctx.fillStyle = '#ea580c';
+        ctx.fillRect(px + 14, py + 9, 4, 13);
+      }
+
+      // Health bar
+      const hpPct = Math.max(0, b.hp / b.maxHp);
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(px + 4, py + 1, 24, 3);
+      ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : (hpPct > 0.25 ? '#eab308' : '#ef4444');
+      ctx.fillRect(px + 4, py + 1, Math.floor(24 * hpPct), 3);
+    }
+
+    function renderUnit(u, animTime) {
+      const cx = u.x * TILE + 16, cy = u.y * TILE + 16;
+      const houseCol = HOUSE_COLORS[u.house] || HOUSE_COLORS.Atreides;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(u.angle || 0);
+
+      if (u.type === 'CombatTank') {
+        // Dual treads
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(-12, -9, 24, 5);
+        ctx.fillRect(-12, 4, 24, 5);
+
+        // Armored hull
+        ctx.fillStyle = houseCol.main;
+        ctx.fillRect(-8, -5, 16, 10);
+        ctx.fillStyle = houseCol.dark;
+        ctx.fillRect(-10, -4, 4, 8);
+
+        // Turret cupola
+        ctx.fillStyle = houseCol.light;
+        ctx.beginPath();
+        ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Cannon barrel
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(2, 0); ctx.lineTo(12, 0);
+        ctx.stroke();
+
+      } else if (u.type === 'Harvester') {
+        // Heavy crawler treads
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(-13, -11, 26, 6);
+        ctx.fillRect(-13, 5, 26, 6);
+
+        // Heavy chassis
+        ctx.fillStyle = houseCol.main;
+        ctx.fillRect(-9, -6, 18, 12);
+
+        // Front intake scoop
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(8, -8, 5, 16);
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(11, -6, 2, 12);
+
+        // Spice container load
+        const loadPct = (u.spice || 0) / (u.maxSpice || 700);
+        if (loadPct > 0) {
+          ctx.fillStyle = '#ea580c';
+          ctx.fillRect(-8, -4, Math.floor(14 * loadPct), 8);
+        }
+
+      } else if (u.type === 'Trike') {
+        // 3 Wheels
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(8, -3, 6, 6);   // Front wheel
+        ctx.fillRect(-10, -9, 6, 5);  // Rear left wheel
+        ctx.fillRect(-10, 4, 6, 5);   // Rear right wheel
+
+        // Triangular speed frame
+        ctx.fillStyle = houseCol.main;
+        ctx.beginPath();
+        ctx.moveTo(8, 0);
+        ctx.lineTo(-8, -6);
+        ctx.lineTo(-8, 6);
+        ctx.closePath();
+        ctx.fill();
+
+        // Dual machine guns
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(4, -3); ctx.lineTo(11, -3);
+        ctx.moveTo(4, 3); ctx.lineTo(11, 3);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+
+      // Selection ring
+      if (selectedUnit === u) {
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Unit health bar
+      const hpPct = Math.max(0, u.hp / u.maxHp);
+      ctx.fillStyle = 'rgba(0,0,0,0.7)';
+      ctx.fillRect(cx - 10, cy - 14, 20, 2.5);
+      ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : (hpPct > 0.25 ? '#eab308' : '#ef4444');
+      ctx.fillRect(cx - 10, cy - 14, Math.floor(20 * hpPct), 2.5);
+    }
+
+    function renderSandworm(animTime) {
+      const headX = sandworm.x * TILE + 16, headY = sandworm.y * TILE + 16;
+
+      // Draw undulating body segments
+      if (sandworm.segments) {
+        for (let i = sandworm.segments.length - 1; i >= 0; i--) {
+          const seg = sandworm.segments[i];
+          const segX = seg.x * TILE + 16, segY = seg.y * TILE + 16;
+          const rad = 7 + (4 - i);
+          ctx.fillStyle = '#78350f';
+          ctx.beginPath();
+          ctx.arc(segX, segY, rad, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Expanding sand displacement shockwaves
+      const wave = (animTime * 0.04) % 18;
+      ctx.strokeStyle = 'rgba(180, 83, 9, 0.4)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(headX, headY, 12 + wave, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Sandworm Maw
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.arc(headX, headY, 12, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Inner gullet
+      ctx.fillStyle = '#451a03';
+      ctx.beginPath();
+      ctx.arc(headX, headY, 8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Ring of ivory teeth
+      ctx.fillStyle = '#fef3c7';
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4 + animTime * 0.002;
+        const tx = headX + Math.cos(a) * 6;
+        const ty = headY + Math.sin(a) * 6;
+        ctx.fillRect(tx - 1, ty - 1, 2, 2);
+      }
+    }
+
+    function renderParticles() {
+      for (const p of particles) {
+        const alpha = p.life / p.maxLife;
+        if (p.type === 'spark') {
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = alpha;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (p.type === 'dust') {
+          ctx.fillStyle = '#d4a359';
+          ctx.globalAlpha = alpha * 0.6;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (p.type === 'shockwave') {
+          ctx.strokeStyle = '#f59e0b';
+          ctx.globalAlpha = alpha * 0.7;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (p.type === 'tracer') {
+          ctx.strokeStyle = '#fef08a';
+          ctx.globalAlpha = alpha;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(p.x1, p.y1);
+          ctx.lineTo(p.x2, p.y2);
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1.0;
+    }
+
+    /* =========================================================================
+       TACTICAL RADAR MINIMAP CANVAS
+       ========================================================================= */
+    function renderRadar(animTime) {
+      const rw = radarCanvas.width, rh = radarCanvas.height;
+      radarCtx.fillStyle = '#090d14';
+      radarCtx.fillRect(0, 0, rw, rh);
+
+      const cellW = rw / W, cellH = rh / H;
+
+      // Render mini terrain
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const t = tiles[y][x];
+          radarCtx.fillStyle = t === 'ROCK' ? '#333842' : (t === 'CONCRETE' ? '#64748b' : (t === 'SPICE_THICK' ? '#dc2626' : (t === 'SPICE_THIN' ? '#d97706' : '#926a2c')));
+          radarCtx.fillRect(x * cellW, y * cellH, cellW, cellH);
+        }
+      }
+
+      // Render buildings
+      for (const b of buildings) {
+        radarCtx.fillStyle = b.house === 'Atreides' ? '#3b82f6' : '#ef4444';
+        radarCtx.fillRect(b.x * cellW, b.y * cellH, cellW * 1.2, cellH * 1.2);
+      }
+
+      // Render units
+      for (const u of units) {
+        radarCtx.fillStyle = u.house === 'Atreides' ? '#60a5fa' : '#f87171';
+        radarCtx.beginPath();
+        radarCtx.arc(u.x * cellW + cellW / 2, u.y * cellH + cellH / 2, 2.5, 0, Math.PI * 2);
+        radarCtx.fill();
+      }
+
+      // Sandworm signature
+      const pulse = 0.5 + 0.5 * Math.sin(animTime * 0.01);
+      radarCtx.fillStyle = `rgba(245, 158, 11, ${pulse})`;
+      radarCtx.beginPath();
+      radarCtx.arc(sandworm.x * cellW + cellW / 2, sandworm.y * cellH + cellH / 2, 4, 0, Math.PI * 2);
+      radarCtx.fill();
+
+      // Sweeping radar beam
+      const sweepAngle = (animTime * 0.002) % (Math.PI * 2);
+      radarCtx.save();
+      radarCtx.translate(rw / 2, rh / 2);
+      radarCtx.rotate(sweepAngle);
+      radarCtx.strokeStyle = 'rgba(34, 197, 94, 0.4)';
+      radarCtx.lineWidth = 1.5;
+      radarCtx.beginPath();
+      radarCtx.moveTo(0, 0);
+      radarCtx.lineTo(rw, 0);
+      radarCtx.stroke();
+      radarCtx.restore();
+    }
+
+    /* =========================================================================
+       MAIN ANIMATION LOOP
+       ========================================================================= */
+    function gameLoop(animTime) {
+      updateParticles();
+
+      // Main battlefield rendering
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          renderTile(x, y, tiles[y][x], animTime);
+        }
+      }
+      for (const b of buildings) renderBuilding(b, animTime);
+      for (const u of units) renderUnit(u, animTime);
+      renderSandworm(animTime);
+      renderParticles();
+
+      // Radar minimap
+      renderRadar(animTime);
+
+      requestAnimationFrame(gameLoop);
+    }
+    requestAnimationFrame(gameLoop);
+
+    /* =========================================================================
+       HARKONNEN GPU LLM OPPONENT & AUTOPLAY INTEGRATION
+       ========================================================================= */
     let gpuMode = false, gpuBusy = false;
     const HAR_UNIT_COSTS = { Trike: 150, CombatTank: 300, Harvester: 400 };
+
     function setOpponentLabel(t) { document.getElementById('hud-opponent').textContent = t; }
+
     function toggleGpuMode() {
+      initAudio();
+      playSound('click');
       gpuMode = !gpuMode;
       document.getElementById('btn-gpu').textContent = 'Play against GPU: ' + (gpuMode ? 'ON' : 'OFF');
       setOpponentLabel(gpuMode ? 'GPU LLM (Qwen3.5-4B)' : 'Script AI');
-      logMsg(gpuMode ? 'Opponent is now the GPU LLM.' : 'Opponent is now the script AI.');
+      logMsg(gpuMode ? 'Opponent set to host GPU LLM.' : 'Opponent set to Script AI.', 'sys');
     }
+
     function compactState() {
       const har = units.filter(u => u.house === 'Harkonnen').map(u => [u.type, u.x, u.y, u.hp]);
       const atr = units.filter(u => u.house === 'Atreides').map(u => [u.type, u.x, u.y, u.hp]);
       return { width: W, height: H, tick: tickCount, credits: credits.Harkonnen, units: har, enemy_units: atr };
     }
+
     function requestGpuMove() {
       if (gpuBusy) return;
       gpuBusy = true;
       setOpponentLabel('GPU thinking...');
       const ctl = new AbortController();
       const to = setTimeout(() => ctl.abort(), 45000);
-      fetch('/api/dune3000/gpu-opponent', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(compactState()), signal: ctl.signal })
-        .then(r => r.json())
-        .then(d => {
-          if (d && d.ok && d.command) { applyGpuCommand(d.command); setOpponentLabel('GPU LLM: ' + d.command.op); }
-          else { scriptFallbackMove(); setOpponentLabel('GPU unavailable, script AI fallback'); }
-        })
-        .catch(() => { scriptFallbackMove(); setOpponentLabel('GPU offline, script AI fallback'); })
-        .finally(() => { clearTimeout(to); gpuBusy = false; });
+      fetch('/api/dune3000/gpu-opponent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(compactState()),
+        signal: ctl.signal
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d && d.ok && d.command) {
+          applyGpuCommand(d.command);
+          setOpponentLabel('GPU LLM: ' + d.command.op);
+        } else {
+          scriptFallbackMove();
+          setOpponentLabel('GPU idle, script fallback');
+        }
+      })
+      .catch(() => {
+        scriptFallbackMove();
+        setOpponentLabel('GPU offline, script fallback');
+      })
+      .finally(() => {
+        clearTimeout(to);
+        gpuBusy = false;
+      });
     }
+
     function scriptFallbackMove() {
       if (credits.Harkonnen >= 300) applyGpuCommand({ op: 'TRAIN', unit: 'CombatTank' });
       else applyGpuCommand({ op: 'ATTACK', x: 2, y: 2 });
     }
+
     function applyGpuCommand(c) {
       if (c.op === 'TRAIN') {
         const cost = HAR_UNIT_COSTS[c.unit];
-        if (!cost || credits.Harkonnen < cost) { logMsg('GPU commander: cannot afford ' + c.unit); return; }
+        if (!cost || credits.Harkonnen < cost) return;
         credits.Harkonnen -= cost;
-        const tank = c.unit === 'CombatTank';
-        units.push({ type: c.unit, house: 'Harkonnen', x: 12, y: 13, tx: 2, ty: 2, hp: tank ? 140 : 90, maxHp: tank ? 140 : 90,
-          spice: 0, maxSpice: c.unit === 'Harvester' ? 700 : 0, dmg: tank ? 22 : (c.unit === 'Trike' ? 15 : 5), range: tank ? 3 : 2 });
-        logMsg('GPU commander trained ' + c.unit + '.');
+        const isTank = c.unit === 'CombatTank';
+        units.push({
+          type: c.unit, house: 'Harkonnen', x: 12, y: 13, tx: 2, ty: 2,
+          hp: isTank ? 140 : 90, maxHp: isTank ? 140 : 90,
+          spice: 0, maxSpice: c.unit === 'Harvester' ? 700 : 0,
+          dmg: isTank ? 22 : (c.unit === 'Trike' ? 15 : 5),
+          range: isTank ? 3 : 2,
+          angle: Math.PI
+        });
+        playSound('build');
+        logMsg(`GPU Harkonnen Commander trained ${c.unit}.`, 'combat');
       } else if (c.op === 'BUILD') {
         const cost = BUILDING_COSTS[c.building];
-        if (!cost || credits.Harkonnen < cost || buildings.some(b => b.x === c.x && b.y === c.y)) { logMsg('GPU commander: build rejected'); return; }
+        if (!cost || credits.Harkonnen < cost || buildings.some(b => b.x === c.x && b.y === c.y)) return;
         credits.Harkonnen -= cost;
-        buildings.push({ type: c.building, house: 'Harkonnen', x: c.x, y: c.y, hp: 200, maxHp: 400,
-          pProd: c.building === 'WindTrap' ? 100 : 0, pCons: c.building === 'WindTrap' ? 0 : 30 });
-        logMsg('GPU commander built ' + c.building + ' at (' + c.x + ', ' + c.y + ').');
+        buildings.push({
+          type: c.building, house: 'Harkonnen', x: c.x, y: c.y, hp: 200, maxHp: 400,
+          pProd: c.building === 'WindTrap' ? 100 : 0, pCons: c.building === 'WindTrap' ? 0 : 30
+        });
+        playSound('build');
+        logMsg(`GPU Harkonnen Commander built ${c.building} at (${c.x}, ${c.y}).`, 'combat');
       } else if (c.op === 'ATTACK') {
-        units.filter(u => u.house === 'Harkonnen' && u.type !== 'Harvester').forEach(u => { u.tx = c.x; u.ty = c.y; });
-        logMsg('GPU commander orders attack on (' + c.x + ', ' + c.y + ').');
+        units.filter(u => u.house === 'Harkonnen' && u.type !== 'Harvester').forEach(u => {
+          u.tx = c.x; u.ty = c.y;
+        });
+        logMsg(`GPU Harkonnen Commander ordered strike on (${c.x}, ${c.y}).`, 'combat');
       }
     }
+
     let autoTimer = setInterval(stepTick, 1200);
     function toggleAutoplay() {
+      initAudio();
+      playSound('click');
       const btn = document.getElementById('btn-autoplay');
       if (autoTimer) {
         clearInterval(autoTimer);
@@ -410,8 +1228,9 @@
         btn.textContent = 'Auto-Play: ON';
       }
     }
-    logMsg('Dune 3000 initialized. Select units or construct buildings.');
-    render();
+
+    logMsg('Tactical Command Initialized. Ready for battle on Arrakis.', 'sys');
+    updateHud();
   </script>
 </body>
 </html>

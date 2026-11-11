@@ -291,6 +291,35 @@ class GameState:
                             visible.add((tx, ty))
         return visible
 
+    def spawn_special_unit(self, house: str, x: int, y: int) -> Optional[Unit]:
+        """Spawn the house's signature special unit.
+
+        Costs 300 credits. If the house has insufficient credits or is not in
+        HOUSE_SPECIAL_UNITS, returns None.
+
+        Otherwise deducts 300 credits, creates the special Unit at (x, y) with
+        the house's configured stats, appends it to self.units, and returns it.
+        """
+        if self.credits.get(house, 0) < SPECIAL_UNIT_COST or house not in HOUSE_SPECIAL_UNITS:
+            return None
+        
+        spec = HOUSE_SPECIAL_UNITS[house]
+        unit = Unit(
+            unit_type=spec["unit_type"],
+            house=house,
+            x=x,
+            y=y,
+            hp=spec["hp"],
+            max_hp=spec["max_hp"],
+            attack_damage=spec["attack_damage"],
+            attack_range=spec["attack_range"],
+            weapon_type=spec["weapon_type"],
+            armor_type=spec["armor_type"],
+        )
+        self.credits[house] = self.credits.get(house, 0) - SPECIAL_UNIT_COST
+        self.units.append(unit)
+        return unit
+
     def check_winner(self) -> Optional[str]:
         """Check if the game has a winner or a draw.
 
