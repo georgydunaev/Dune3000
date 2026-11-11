@@ -1,6 +1,6 @@
 # Ticket 14: Implement Algorithmic Sandworm SVG Sprite Generator in `procgen.py`
 
-**State:** open
+**State:** closed
 **Priority:** medium
 
 ## Description
