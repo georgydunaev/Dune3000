@@ -97,6 +97,35 @@ class TestDune3000Engine(unittest.TestCase):
         # Normal power: no consumption -> full efficiency.
         self.assertEqual(gs.power_efficiency("Atreides"), 1.0)
 
+    def test_max_spice_capacity(self):
+        """max_spice_capacity: base 1000, +1000 per alive Refinery, +1000 per alive Silo."""
+        gs = GameState(GridMap(8, 8))
+        # Base capacity for any house
+        self.assertEqual(gs.max_spice_capacity("Atreides"), 1000)
+        self.assertEqual(gs.max_spice_capacity("Harkonnen"), 1000)
+        self.assertEqual(gs.max_spice_capacity("Ordos"), 1000)
+        
+        # Refinery adds 1000 when alive (hp > 0)
+        ref = Building("Refinery", "Atreides", 1, 1)
+        gs.buildings.append(ref)
+        self.assertEqual(gs.max_spice_capacity("Atreides"), 2000)
+        
+        # Silo adds 1000 when alive (hp > 0)
+        silo = Building("Silo", "Atreides", 2, 2)
+        gs.buildings.append(silo)
+        self.assertEqual(gs.max_spice_capacity("Atreides"), 3000)
+        
+        # Dead buildings (hp <= 0) should not contribute
+        dead_ref = Building("Refinery", "Atreides", 3, 3, hp=0)
+        gs.buildings.append(dead_ref)
+        self.assertEqual(gs.max_spice_capacity("Atreides"), 3000)
+        
+        # Different houses count their own buildings
+        hark_ref = Building("Refinery", "Harkonnen", 4, 4)
+        gs.buildings.append(hark_ref)
+        self.assertEqual(gs.max_spice_capacity("Atreides"), 3000)
+        self.assertEqual(gs.max_spice_capacity("Harkonnen"), 2000)
+
         # Low power: produced half of consumed -> ratio 0.5.
         windtrap = Building("Windtrap", "Atreides", 1, 1, power_produced=50)
         gs.buildings.append(windtrap)

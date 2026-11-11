@@ -132,6 +132,22 @@ class GameState:
             return 1.0
         return max(0.25, round(produced / consumed, 4))
 
+    def max_spice_capacity(self, house: str) -> int:
+        """Calculate maximum spice capacity for a house.
+        
+        Base capacity is 1000.
+        Each alive (hp > 0) Refinery owned by house adds 1000.
+        Each alive (hp > 0) Silo owned by house adds 1000.
+        """
+        capacity = 1000
+        for b in self.buildings:
+            if b.house == house and b.hp > 0:
+                if b.building_type == "Refinery":
+                    capacity += 1000
+                elif b.building_type == "Silo":
+                    capacity += 1000
+        return capacity
+
     def place_building(self, building: Building) -> Building:
         tile = self.game_map.get_tile(building.x, building.y)
         if tile == CONCRETE:
