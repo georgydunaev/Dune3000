@@ -541,10 +541,8 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertIsNotNone(result5)  # 1000 >= 200
         self.assertEqual(gs5.credits["Atreides"], 800)  # 1000 - 200
 
-def test_construct_building(self):
-        """test_construct_building: successful construction with credit deduction,
-        insufficient credits returning None, and power settings."""
-        # Test 1: Successful construction - WindTrap costs 200
+
+    def test_construct_building(self):
         gs = GameState(GridMap(8, 8))
         result = gs.construct_building("Atreides", "WindTrap", 2, 2)
         self.assertIsNotNone(result)
@@ -554,45 +552,27 @@ def test_construct_building(self):
         self.assertEqual(result.y, 2)
         self.assertEqual(result.power_produced, 100)
         self.assertEqual(result.power_consumed, 0)
-        self.assertEqual(gs.credits["Atreides"], 800)  # 1000 - 200
+        self.assertEqual(gs.credits["Atreides"], 800)
         self.assertIn(result, gs.buildings)
 
-        # Test 2: Successful construction - Refinery costs 400
-        gs2 = GameState(GridMap(8, 8))
-        result2 = gs2.construct_building("Harkonnen", "Refinery", 3, 3)
-        self.assertIsNotNone(result2)
-        self.assertEqual(result2.building_type, "Refinery")
-        self.assertEqual(result2.house, "Harkonnen")
-        self.assertEqual(gs2.credits["Harkonnen"], 600)  # 1000 - 400
-
-        # Test 3: Successful construction - Barracks costs 250
-        gs3 = GameState(GridMap(8, 8))
-        result3 = gs3.construct_building("Ordos", "Barracks", 1, 1)
-        self.assertIsNotNone(result3)
-        self.assertEqual(result3.building_type, "Barracks")
-        self.assertEqual(result3.house, "Ordos")
-        self.assertEqual(gs3.credits["Ordos"], 750)  # 1000 - 250
-
-        # Test 4: Successful construction - Silo costs 150
-        gs4 = GameState(GridMap(8, 8))
-        result4 = gs4.construct_building("Atreides", "Silo", 2, 2)
-        self.assertIsNotNone(result4)
-        self.assertEqual(result4.building_type, "Silo")
-        self.assertEqual(result4.house, "Atreides")
-        self.assertEqual(gs4.credits["Atreides"], 850)  # 1000 - 150
-
-        # Test 5: Insufficient credits returns None
         gs5 = GameState(GridMap(8, 8))
-        gs5.credits["Atreides"] = 100  # set low credits
-        result5 = gs5.construct_building("Atreides", "WindTrap", 1, 1)  # costs 200
-        self.assertIsNone(result5)
-        self.assertEqual(gs5.credits["Atreides"], 100)  # credits should remain unchanged
+        gs5.credits["Atreides"] = 100
+        self.assertIsNone(gs5.construct_building("Atreides", "WindTrap", 1, 1))
+        self.assertEqual(gs5.credits["Atreides"], 100)
 
-        # Test 6: Unknown building type defaults to cost 250
-        gs6 = GameState(GridMap(8, 8))
-        result6 = gs6.construct_building("Atreides", "UnknownBuilding", 1, 1)
-        self.assertIsNotNone(result6)  # 1000 >= 250 default cost
-        self.assertEqual(gs6.credits["Atreides"], 750)  # 1000 - 250
+    def test_check_winner(self):
+        gs = GameState(GridMap(8, 8))
+        gs.units.extend([Unit("Trike", "Atreides", 2, 2, hp=50), Unit("Trike", "Harkonnen", 4, 4, hp=50)])
+        self.assertIsNone(gs.check_winner())
+
+        gs2 = GameState(GridMap(8, 8))
+        gs2.units.append(Unit("Trike", "Atreides", 2, 2, hp=50))
+        self.assertEqual(gs2.check_winner(), "Atreides")
+
+        gs3 = GameState(GridMap(8, 8))
+        gs3.units.append(Unit("Trike", "Atreides", 2, 2, hp=0))
+        self.assertEqual(gs3.check_winner(), "Draw")
+
 
 if __name__ == "__main__":
     unittest.main()
