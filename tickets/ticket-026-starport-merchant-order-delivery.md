@@ -1,5 +1,5 @@
 # Ticket 26: Implement CHOAM Starport Dynamic Pricing & Unit Delivery (`GameState.order_starport_unit`)
-**State:** open
+**State:** closed
 **Labels:** dune3000
 
 ## Context

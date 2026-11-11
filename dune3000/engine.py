@@ -16,7 +16,7 @@ HOUSES = ("Atreides", "Harkonnen", "Ordos")
 
 UNIT_COSTS: Dict[str, int] = {"Trike": 150, "CombatTank": 300, "Harvester": 400}
 
-BUILDING_COSTS: Dict[str, int] = {"WindTrap": 200, "Refinery": 400, "Barracks": 250, "Silo": 150}
+BUILDING_COSTS: Dict[str, int] = {"WindTrap": 200, "Refinery": 400, "Barracks": 250, "Silo": 150, "Starport": 500}
 
 # Signature special vehicle of each Great House (spawned via GameState.spawn_special_unit).
 HOUSE_SPECIAL_UNITS: Dict[str, Dict] = {
@@ -394,6 +394,44 @@ class GameState:
         if self.credits.get(house, 0) < cost:
             return None
         self.credits[house] -= cost
+        unit = Unit(unit_type=unit_type, house=house, x=x, y=y)
+        self.units.append(unit)
+        return unit
+
+    def order_starport_unit(self, house: str, unit_type: str, x: int, y: int) -> Optional[Unit]:
+        """Order a unit from the CHOAM Starport at dynamically fluctuating market prices.
+
+        The price depends on the current game tick:
+        - Even ticks: 20% discount (price = int(base * 0.8))
+        - Odd ticks: 20% price surge (price = int(base * 1.2))
+
+        Returns None if the house doesn't own a Starport, has insufficient credits,
+        or the unit type is unknown.
+
+        Otherwise deducts the price from self.credits[house], creates a Unit,
+        appends it to self.units, and returns the created unit.
+        """
+        # Check if house owns at least one alive Starport building
+        has_starport = any(
+            b.building_type == "Starport" and b.house == house and b.hp > 0
+            for b in self.buildings
+        )
+        if not has_starport:
+            return None
+
+        # Compute base cost and dynamic CHOAM price
+        base = UNIT_COSTS.get(unit_type, 200)
+        if self.tick_count % 2 == 0:
+            price = int(base * 0.8)  # 20% discount on even ticks
+        else:
+            price = int(base * 1.2)  # 20% surge on odd ticks
+
+        # Check if house has enough credits
+        if self.credits.get(house, 0) < price:
+            return None
+
+        # Deduct price, create unit, append to units
+        self.credits[house] -= price
         unit = Unit(unit_type=unit_type, house=house, x=x, y=y)
         self.units.append(unit)
         return unit
