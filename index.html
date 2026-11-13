@@ -353,6 +353,10 @@
       <span class="hud-label">Opponent:</span>
       <span id="hud-opponent" class="hud-stat">Script AI</span>
     </div>
+    <div class="hud-group">
+      <span class="hud-label">Doctrine:</span>
+      <span id="hud-doctrine" class="hud-stat" style="color:#38bdf8">Methodical Mentat</span>
+    </div>
   </div>
 
   <!-- PROMINENT TACTICAL ADVISOR -->
@@ -432,6 +436,7 @@
       <button id="btn-select-mode" class="btn-prod active" onclick="setMode('select')">Select / Marquee Box</button>
       <button id="btn-step-tick" class="btn-prod" onclick="stepTick()">Step Tick</button>
       <button id="btn-autoplay" class="btn-prod" onclick="cycleAutoplayMode()">Auto-Play: OFF</button>
+      <button id="btn-ai-profile" class="btn-prod" onclick="cycleAiCommanderProfile()">Doctrine: Methodical Mentat</button>
       <button id="btn-gpu" class="btn-prod btn-special" onclick="toggleGpuMode()" title="Harkonnen commander driven by local GPU LLM; fallback to Script AI if busy">Play against GPU: OFF</button>
       <button id="btn-sound" class="btn-prod" onclick="toggleSound()">Sound: ON</button>
     </div>
@@ -2075,6 +2080,85 @@
     /* =========================================================================
        AUTONOMOUS SKIRMISH AI COMMANDER (Spectator Mode and Skirmish AI)
        ========================================================================= */
+    const AI_COMMANDER_PROFILES = [
+      {
+        id: 'mentat',
+        name: 'Methodical Mentat',
+        retreatRatio: 0.35,
+        kiting: true,
+        escortHarvesters: true,
+        targetBias: 'threat',
+        preferredUnits: ['CombatTank', 'SiegeTank', 'RocketTrooper'],
+        description: 'Disciplined combined arms, long-range kiting, and coordinated focus fire.'
+      },
+      {
+        id: 'raider',
+        name: 'Aggressive Raider',
+        retreatRatio: 0.15,
+        kiting: false,
+        escortHarvesters: false,
+        targetBias: 'economic',
+        preferredUnits: ['Trike', 'Quad', 'CombatTank', 'Gunship'],
+        description: 'Fast offensive strikes, relentless aggression, and harassment of enemy harvesters.'
+      },
+      {
+        id: 'turtler',
+        name: 'Economic Turtler',
+        retreatRatio: 0.45,
+        kiting: true,
+        escortHarvesters: true,
+        targetBias: 'defensive',
+        preferredUnits: ['Harvester', 'CombatTank', 'RocketTrooper'],
+        description: 'Spice economy expansion, fortified defenses, and heavy harvester protection.'
+      }
+    ];
+    let currentAiProfileIndex = 0;
+
+    function cycleAiCommanderProfile() {
+      currentAiProfileIndex = (currentAiProfileIndex + 1) % AI_COMMANDER_PROFILES.length;
+      const profile = AI_COMMANDER_PROFILES[currentAiProfileIndex];
+      const btn = document.getElementById('btn-ai-profile');
+      if (btn) btn.textContent = `Doctrine: ${profile.name}`;
+      const docLabel = document.getElementById('hud-doctrine');
+      if (docLabel) docLabel.textContent = profile.name;
+      logMsg(`Tactical Doctrine updated to: ${profile.name}. ${profile.description}`, 'sys');
+      playSound('click');
+    }
+
+    function getPriorityTarget(u, candidates, bias = 'threat') {
+      let best = null;
+      let bestScore = -999999;
+      candidates.forEach(cand => {
+        if (!cand || cand.hp <= 0) return;
+        const cx = cand.type in BUILDING_SPECS || cand.pProd !== undefined ? cand.x + 0.5 : cand.x;
+        const cy = cand.type in BUILDING_SPECS || cand.pProd !== undefined ? cand.y + 0.5 : cand.y;
+        const dist = Math.hypot(cx - u.x, cy - u.y);
+        let score = 100 - dist * 8;
+
+        if (cand.type === 'Harvester') {
+          score += (bias === 'economic' ? 120 : 80);
+        } else if (cand.type === 'SiegeTank' || cand.type === 'SonicTank' || cand.type === 'Devastator') {
+          score += (bias === 'threat' ? 95 : 60);
+        } else if (cand.type === 'MissileTank' || cand.type === 'Gunship' || cand.type === 'CombatTank') {
+          score += 55;
+        } else if (cand.type === 'Refinery' || cand.type === 'Palace') {
+          score += (bias === 'economic' ? 85 : 40);
+        } else if (cand.pProd !== undefined) {
+          score += 30;
+        }
+
+        const maxH = cand.maxHp || cand.hp || 100;
+        const hpRatio = cand.hp / maxH;
+        score += (1.0 - hpRatio) * 60;
+
+        if (score > bestScore) {
+          bestScore = score;
+          best = cand;
+        }
+      });
+      return best;
+    }
+
     function cycleAutoplayMode() {
       if (autoplayMode === 'both') {
         autoplayMode = 'opponent';
@@ -2117,6 +2201,7 @@
     }
 
     function stepAiCommander(house) {
+      const profile = AI_COMMANDER_PROFILES[currentAiProfileIndex];
       const enemyHouse = house === 'Atreides' ? 'Harkonnen' : 'Atreides';
       const myUnits = units.filter(u => u.house === house && u.hp > 0);
       const enemyUnits = units.filter(u => u.house === enemyHouse && u.hp > 0);
@@ -2127,7 +2212,6 @@
       myUnits.forEach(u => {
         if (u.type === 'Harvester' && !u.airlifted && !u.wormPanic) {
           if (u.spice === 0 && Math.hypot(u.tx - u.x, u.ty - u.y) < 1.0) {
-            // Find nearest rich unmined spice tile
             let bestX = house === 'Atreides' ? 18.5 : W - 18.5;
             let bestY = house === 'Atreides' ? 9.5 : H - 9.5;
             let bestScore = -999;
@@ -2151,19 +2235,19 @@
         }
       });
 
-      // 2. Autonomous Reinforcement Training and War Production
+      // 2. Autonomous Reinforcement Training influenced by Commander Doctrine
       const cred = credits[house] || 0;
       const harvCount = myUnits.filter(u => u.type === 'Harvester').length;
-      const tankCount = myUnits.filter(u => u.type === 'CombatTank' || u.type === 'SiegeTank' || u.type === 'MissileTank').length;
+      const maxHarvs = profile.id === 'turtler' ? 3 : (profile.id === 'raider' ? 1 : 2);
       const airCount = myUnits.filter(u => u.isAir).length;
 
-      if (cred >= 400 && harvCount < 2 && hasBuilding(house, 'Refinery')) {
+      if (cred >= 400 && harvCount < maxHarvs && hasBuilding(house, 'Refinery')) {
         trainUnit('Harvester', 400, house);
       } else if (cred >= 600 && hasBuilding(house, 'Palace') && Math.random() < 0.35) {
         if (house === 'Atreides') {
           trainUnit('SonicTank', 600, house);
         } else {
-          // Harkonnen Death Hand Superweapon Strike (45s Tactical Recharge Cooldown)
+          // Harkonnen Death Hand Superweapon Strike
           if (!window.harkonnenDeathHandCooldown || window.harkonnenDeathHandCooldown <= 0) {
             const targetB = enemyBuildings[Math.floor(Math.random() * enemyBuildings.length)];
             if (targetB) {
@@ -2172,7 +2256,9 @@
             }
           }
         }
-      } else if (cred >= 450 && hasBuilding(house, 'HeavyFactory') && Math.random() < 0.4) {
+      } else if (profile.id === 'raider' && cred >= 150 && (hasBuilding(house, 'LightFactory') || hasBuilding(house, 'HeavyFactory')) && Math.random() < 0.55) {
+        trainUnit(Math.random() < 0.5 ? 'Trike' : 'Quad', 150, house);
+      } else if (profile.id === 'mentat' && cred >= 450 && hasBuilding(house, 'HeavyFactory') && Math.random() < 0.45) {
         trainUnit(Math.random() < 0.5 ? 'SiegeTank' : 'MissileTank', 450, house);
       } else if (cred >= 350 && hasBuilding(house, 'HighTech') && airCount < 4 && Math.random() < 0.45) {
         trainUnit(Math.random() < 0.6 ? 'Ornithopter' : 'Gunship', 350, house);
@@ -2188,39 +2274,70 @@
         trainUnit(Math.random() < 0.5 ? 'Trike' : 'Quad', 150, house);
       }
 
-      // 3. Autonomous Tactical Offensives and Flanking Orders
+      // 3. Harvester Defense Screening and Escort Orders
+      const myHarvesters = myUnits.filter(u => u.type === 'Harvester' && !u.airlifted);
       const combatUnits = myUnits.filter(u => !u.isAir && u.type !== 'Harvester' && !u.repairing && !u.wormPanic);
-      if (combatUnits.length >= 4) {
-        // Form a tactical battle column
-        const target = enemyUnits.length > 0
-          ? enemyUnits[Math.floor(Math.random() * enemyUnits.length)]
-          : (enemyBuildings.length > 0 ? enemyBuildings[0] : null);
+
+      if (profile.escortHarvesters && myHarvesters.length > 0 && combatUnits.length >= 2) {
+        myHarvesters.forEach(harv => {
+          const nearbyEnemy = enemyUnits.find(e => Math.hypot(e.x - harv.x, e.y - harv.y) <= 6.0);
+          if (nearbyEnemy) {
+            const defender = combatUnits.find(c => !c.assignedEscort);
+            if (defender) {
+              defender.tx = nearbyEnemy.x;
+              defender.ty = nearbyEnemy.y;
+              defender.assignedEscort = true;
+            }
+          } else if (profile.id === 'turtler') {
+            const escort = combatUnits.find(c => !c.assignedEscort);
+            if (escort && Math.hypot(escort.x - harv.x, escort.y - harv.y) > 3.0) {
+              escort.tx = harv.x + (Math.random() - 0.5) * 2;
+              escort.ty = harv.y + (Math.random() - 0.5) * 2;
+              escort.assignedEscort = true;
+            }
+          }
+        });
+      }
+
+      combatUnits.forEach(c => { c.assignedEscort = false; });
+
+      // 4. Autonomous Tactical Offensives with Dynamic Formation Spacing and Prioritized Targets
+      const unassignedCombat = combatUnits.filter(u => !u.assignedEscort);
+      const minAttackGroup = profile.id === 'raider' ? 2 : 4;
+      if (unassignedCombat.length >= minAttackGroup) {
+        const candidates = enemyUnits.concat(enemyBuildings);
+        const target = getPriorityTarget(unassignedCombat[0], candidates, profile.targetBias);
 
         if (target) {
-          combatUnits.forEach((u, idx) => {
+          unassignedCombat.forEach((u, idx) => {
             if (Math.hypot(u.tx - u.x, u.ty - u.y) < 1.5 || Math.random() < 0.25) {
-              const row = Math.floor(idx / 4);
-              const col = idx % 4;
-              u.tx = Math.max(1, Math.min(W - 2, target.x + (col - 1.5) * 1.5));
-              u.ty = Math.max(1, Math.min(H - 2, target.y + (row - 1.5) * 1.5));
+              const angle = (2.0 * Math.PI * idx) / Math.max(1, unassignedCombat.length);
+              const radius = 1.6 + Math.floor(idx / 4) * 1.2;
+              const tx = target.type in BUILDING_SPECS || target.pProd !== undefined ? target.x + 0.5 : target.x;
+              const ty = target.type in BUILDING_SPECS || target.pProd !== undefined ? target.y + 0.5 : target.y;
+              u.tx = Math.max(1, Math.min(W - 2, tx + Math.cos(angle) * radius));
+              u.ty = Math.max(1, Math.min(H - 2, ty + Math.sin(angle) * radius));
             }
           });
         }
       }
 
-      // 4. Autonomous Aviation Wing Sorties
+      // 5. Autonomous Aviation Wing Sorties
       const airUnits = myUnits.filter(u => u.isAir);
-      if (airUnits.length > 0 && Math.random() < 0.3) {
-        const airTarget = enemyUnits.length > 0 ? enemyUnits[Math.floor(Math.random() * enemyUnits.length)] : null;
+      if (airUnits.length > 0 && Math.random() < 0.35) {
+        const airCandidates = enemyUnits.concat(enemyBuildings);
+        const airTarget = getPriorityTarget(airUnits[0], airCandidates, profile.targetBias);
         if (airTarget) {
           airUnits.forEach(a => {
-            a.tx = airTarget.x + (Math.random() - 0.5) * 2;
-            a.ty = airTarget.y + (Math.random() - 0.5) * 2;
+            const atx = airTarget.type in BUILDING_SPECS || airTarget.pProd !== undefined ? airTarget.x + 0.5 : airTarget.x;
+            const aty = airTarget.type in BUILDING_SPECS || airTarget.pProd !== undefined ? airTarget.y + 0.5 : airTarget.y;
+            a.tx = atx + (Math.random() - 0.5) * 2;
+            a.ty = aty + (Math.random() - 0.5) * 2;
           });
         }
       }
 
-      // 5. Autonomous Concrete & Base Expansion
+      // 6. Autonomous Concrete and Base Expansion
       if (cred >= 180 && hasBuilding(house, 'ConstructionYard') && Math.random() < 0.2) {
         if (!hasBuilding(house, 'Palace') && hasBuilding(house, 'Starport')) {
           const spawnBase = house === 'Atreides' ? { x: 7, y: 7 } : { x: W - 8, y: H - 8 };
@@ -2277,15 +2394,27 @@
       units.forEach(u => {
         if (u.airlifted || u.hp <= 0) return;
 
-        // Ground Unit Self-Repair Decision
-        if (!u.isAir && u.hp < u.maxHp * 0.45 && !u.repairing && !u.wormPanic) {
-          const rf = buildings.find(b => b.house === u.house && b.type === 'RepairFacility' && b.hp > 0);
-          if (rf) {
-            u.repairing = true;
-            u.tx = rf.x + 0.5;
-            u.ty = rf.y + 0.5;
-            playSound('repair');
-            logMsg(`${u.house} ${u.type} critically damaged (${Math.round(u.hp)} HP). Retreating to Repair Facility!`, 'repair');
+        // Ground Unit Tactical Retreat & Self-Repair Decision
+        if (!u.isAir && !u.repairing && !u.wormPanic) {
+          if (u.hp < u.maxHp * 0.45) {
+            const rf = buildings.find(b => b.house === u.house && b.type === 'RepairFacility' && b.hp > 0);
+            if (rf) {
+              u.repairing = true;
+              u.tx = rf.x + 0.5;
+              u.ty = rf.y + 0.5;
+              playSound('repair');
+              logMsg(`${u.house} ${u.type} critically damaged (${Math.round(u.hp)} HP). Retreating to Repair Facility!`, 'repair');
+            } else if (u.hp < u.maxHp * 0.35) {
+              // Tactical retreat to allied defensive perimeter or headquarters when critically damaged
+              const safeB = buildings.find(b => b.house === u.house && b.hp > 0);
+              if (safeB) {
+                const distToSafe = Math.hypot(u.x - (safeB.x + 0.5), u.y - (safeB.y + 0.5));
+                if (distToSafe > 3.0) {
+                  u.tx = safeB.x + 0.5;
+                  u.ty = safeB.y + 0.5;
+                }
+              }
+            }
           }
         }
 
@@ -2318,15 +2447,19 @@
             logMsg(`${u.house} Harvester completed offloading at Refinery. Returning to spice field!`, 'economy');
           }
         }
-        // Worm threat detection & avoidance
+        // Worm threat detection & tactical avoidance
         if (!u.isAir) {
+          const currentTile = (tiles[Math.floor(u.y)] && tiles[Math.floor(u.y)][Math.floor(u.x)]) ? tiles[Math.floor(u.y)][Math.floor(u.x)] : 'SAND';
+          if (u.wormPanic && (currentTile === 'ROCK' || currentTile === 'CONCRETE')) {
+            u.wormPanic = false;
+          }
           sandworms.forEach(w => {
-            if (!w.submerged && !w.dormant && Math.hypot(u.x - w.x, u.y - w.y) < 5.0) {
-              const tile = tiles[Math.floor(u.y)][Math.floor(u.x)];
-              if (tile !== 'ROCK' && tile !== 'CONCRETE') {
+            if (!w.submerged && !w.dormant && Math.hypot(u.x - w.x, u.y - w.y) < 5.5) {
+              if (currentTile !== 'ROCK' && currentTile !== 'CONCRETE') {
                 u.wormPanic = true;
-                u.tx = u.house === 'Atreides' ? 4.5 : W - 5.5;
-                u.ty = u.house === 'Atreides' ? 4.5 : H - 5.5;
+                const safeBase = u.house === 'Atreides' ? { x: 4.5, y: 4.5 } : { x: W - 5.5, y: H - 5.5 };
+                u.tx = safeBase.x;
+                u.ty = safeBase.y;
               }
             }
           });
@@ -2410,8 +2543,8 @@
             }
           }
 
-          // C. Tactical Kiting for Long-Range Infantry & Missile Tanks
-          if (u.type === 'RocketTrooper' || u.type === 'MissileTank' || u.type === 'Sardaukar') {
+          // C. Tactical Kiting for Long-Range Infantry, Tanks & Special Weapons
+          if (u.range >= 3.0 || u.type === 'RocketTrooper' || u.type === 'MissileTank' || u.type === 'Sardaukar' || u.type === 'SonicTank') {
             const threateningEnemy = units.find(e => e.house !== u.house && e.hp > 0 && Math.hypot(e.x - u.x, e.y - u.y) <= 2.2);
             if (threateningEnemy && !u.repairing) {
               const awayAngle = Math.atan2(u.y - threateningEnemy.y, u.x - threateningEnemy.x);
@@ -2440,8 +2573,9 @@
 
         // Combat: Attack Enemy Units, Nearby Sandworms, or Enemy Buildings
         if (u.dmg > 0) {
-          // Priority 1: Enemy unit in weapon range
-          const enemy = units.find(e => e.house !== u.house && e.hp > 0 && Math.hypot(e.x - u.x, e.y - u.y) <= u.range);
+          // Priority 1: High-value smart target prioritization among enemy units in weapon range
+          const enemiesInRange = units.filter(e => e.house !== u.house && e.hp > 0 && Math.hypot(e.x - u.x, e.y - u.y) <= u.range);
+          const enemy = enemiesInRange.length > 0 ? getPriorityTarget(u, enemiesInRange, 'threat') : null;
           if (enemy && Math.random() < dt * 1.5) {
             enemy.hp = Math.max(0, enemy.hp - u.dmg);
             u.turretAngle = Math.atan2(enemy.y - u.y, enemy.x - u.x);
@@ -2480,8 +2614,9 @@
               addExplosion(nearbyWorm.x * TILE, nearbyWorm.y * TILE, 14);
               damageSandworm(nearbyWorm, u.dmg, u.house);
             } else {
-              // Priority 3: Enemy building in range
-              const enemyB = buildings.find(b => b.house !== u.house && b.hp > 0 && Math.hypot(b.x + 0.5 - u.x, b.y + 0.5 - u.y) <= u.range);
+              // Priority 3: Enemy building in range with target prioritization
+              const buildingsInRange = buildings.filter(b => b.house !== u.house && b.hp > 0 && Math.hypot(b.x + 0.5 - u.x, b.y + 0.5 - u.y) <= u.range);
+              const enemyB = buildingsInRange.length > 0 ? getPriorityTarget(u, buildingsInRange, 'threat') : null;
               if (enemyB && Math.random() < dt * 1.5) {
                 enemyB.hp = Math.max(0, enemyB.hp - u.dmg);
                 u.turretAngle = Math.atan2(enemyB.y + 0.5 - u.y, enemyB.x + 0.5 - u.x);

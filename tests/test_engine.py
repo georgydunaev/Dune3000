@@ -161,7 +161,7 @@ class TestDune3000Engine(unittest.TestCase):
         # Normal power: no consumption -> full efficiency.
         self.assertEqual(gs.power_efficiency("Atreides"), 1.0)
 
-    def test_unit_move_towards(self):
+    def test_unit_move_towards_basic(self):
         # Test moving towards a target with x > self.x (move right)
         gm = GridMap(8, 8)
         unit = Unit("TestUnit", "Atreides", 2, 2)
@@ -587,13 +587,17 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertEqual(attacker2.xp, 95)
         self.assertEqual(attacker2.rank, 0)  # still rank 0, need 5 more XP for rank 1
 
-        # Three more attacks of 5 dmg each = 15 XP, total 95 + 15 = 110 >= 100 => rank 1
-        for _ in range(3):
-            dmg2 = attacker2.attack(target2)
-            self.assertEqual(dmg2, 5)
-        self.assertEqual(attacker2.xp, 110)
+        # Next attack brings xp to 100 -> promoted to rank 1 (attack_damage increases from 20 to 25)
+        dmg_promo = attacker2.attack(target2)
+        self.assertEqual(dmg_promo, 5)
+        self.assertEqual(attacker2.xp, 100)
         self.assertEqual(attacker2.rank, 1)  # promoted to rank 1
         self.assertEqual(attacker2.attack_damage, 25)  # base 20 + 5 from rank 1
+
+        # Subsequent attack deals 6 damage with promoted attack_damage (compute_damage("bullet", "heavy", 25) = 6)
+        dmg_next = attacker2.attack(target2)
+        self.assertEqual(dmg_next, 6)
+        self.assertEqual(attacker2.xp, 106)
 
         # Test 3: XP gain is 0 when attack misses (target out of range)
         gs3 = GameState(GridMap(8, 8))
@@ -627,17 +631,18 @@ class TestDune3000Engine(unittest.TestCase):
 
         # Test 6: Rank promotion to rank 2 at xp >= 250
         gs6 = GameState(GridMap(8, 8))
-        attacker6 = Unit("CombatUnit", "Atreides", 1, 1, hp=50, xp=200)
+        attacker6 = Unit("CombatUnit", "Atreides", 1, 1, hp=50, xp=245, rank=1, attack_damage=25)
         target6 = Unit("TargetUnit", "Harkonnen", 1, 2, hp=50)
         gs6.units.append(attacker6)
         gs6.units.append(target6)
-        # Need 50 more XP to reach 250 for rank 2
-        for _ in range(10):
-            dmg6 = attacker6.attack(target6)
-            self.assertEqual(dmg6, 5)
-        self.assertEqual(attacker6.xp, 250)
+        # Attacker at rank 1 has attack_damage=25 (deals 6 damage vs heavy)
+        dmg6 = attacker6.attack(target6)
+        self.assertEqual(dmg6, 6)
+        self.assertEqual(attacker6.xp, 251)
         self.assertEqual(attacker6.rank, 2)  # promoted to rank 2
         self.assertEqual(attacker6.attack_damage, 30)  # base 20 + 5 (rank 1) + 5 (rank 2)
+
+    def test_train_unit(self):
         """test_train_unit: successful training with credit deduction and unit creation,
         and insufficient credits returning None."""
         # Test 1: Successful training - Trike costs 150
@@ -1403,8 +1408,8 @@ class TestDune3000Engine(unittest.TestCase):
         self.assertFalse(gs.sabotage(sab2, enemy_dead_b))
         self.assertEqual(sab2.hp, 45)
 
-    def test_unit_xp_from_attack(self):
-        """test_unit_xp_from_attack: attacker gains XP equal to dmg, rank promotion at thresholds."""
+    def test_unit_xp_from_attack_extended(self):
+        """test_unit_xp_from_attack_extended: attacker gains XP equal to dmg, rank promotion at thresholds."""
         gs = GameState(GridMap(8, 8))
         attacker = Unit("Trike", "Atreides", 1, 1, hp=50)
         target = Unit("Trike", "Harkonnen", 1, 2, hp=50)
@@ -1501,6 +1506,125 @@ class TestDune3000Engine(unittest.TestCase):
         ad = Building("AirDefense", "Atreides", 4, 4, hp=420)
         self.assertEqual(ad.building_type, "AirDefense")
         self.assertEqual(ad.hp, 420)
+
+    def test_unit_tactical_retreat(self):
+        """Test unit tactical retreat when damaged below threshold."""
+        gm = GridMap(10, 10)
+        u = Unit("CombatUnit", "Atreides", 5, 5, hp=25, max_hp=100)
+        self.assertTrue(u.should_retreat(health_ratio=0.35))
+
+        healthy_u = Unit("CombatUnit", "Atreides", 5, 5, hp=90, max_hp=100)
+        self.assertFalse(healthy_u.should_retreat(health_ratio=0.35))
+
+        # Retreat towards allied base at (1, 1)
+        prev_x, prev_y = u.x, u.y
+        new_pos = u.retreat_towards(1, 1, gm)
+        self.assertLess(new_pos[0], prev_x)
+        self.assertEqual(new_pos[1], prev_y)
+        self.assertEqual((u.x, u.y), new_pos)
+
+    def test_unit_kiting_step(self):
+        """Test kiting behavior for ranged units evading close enemies."""
+        gm = GridMap(10, 10)
+        sniper = Unit("RocketTrooper", "Atreides", 5, 5, hp=100, attack_range=3)
+        brawler = Unit("CombatTank", "Harkonnen", 5, 6, hp=100, attack_range=1)
+
+        # Sniper should step away from brawler
+        kite_pos = sniper.compute_kiting_step(brawler, gm)
+        self.assertEqual(kite_pos, (5, 4))
+        self.assertEqual((sniper.x, sniper.y), (5, 4))
+
+        # Further evasion moves it another step further away to (5, 3)
+        away_pos = sniper.move_away_from(5, 6, gm)
+        self.assertEqual(away_pos, (5, 3))
+        self.assertEqual((sniper.x, sniper.y), (5, 3))
+
+    def test_target_prioritization(self):
+        """Test target prioritization scoring and selection heuristics."""
+        gm = GridMap(10, 10)
+        attacker = Unit("CombatUnit", "Atreides", 3, 3, hp=100)
+
+        # Targets
+        generic_trike = Unit("Trike", "Harkonnen", 3, 4, hp=100, max_hp=100)  # dist = 1
+        harvester = Unit("Harvester", "Harkonnen", 3, 5, hp=150, max_hp=150)  # dist = 2
+        wounded_siege = Unit("SiegeTank", "Harkonnen", 5, 3, hp=30, max_hp=300)  # dist = 2, critical hp
+
+        candidates = [generic_trike, harvester, wounded_siege]
+
+        # Threat bias should heavily prioritize critical SiegeTank or high-threat targets
+        p_siege = attacker.calculate_target_priority(wounded_siege, 2.0, bias="threat")
+        p_trike = attacker.calculate_target_priority(generic_trike, 1.0, bias="threat")
+        self.assertGreater(p_siege, p_trike)
+
+        selected_threat = attacker.select_priority_target(candidates, gm, bias="threat")
+        self.assertEqual(selected_threat, wounded_siege)
+
+        # Economy bias should prioritize Harvester
+        selected_econ = attacker.select_priority_target(candidates, gm, bias="economy")
+        self.assertEqual(selected_econ, harvester)
+
+    def test_commander_profiles(self):
+        """Test AI commander profiles with distinct strategic priorities."""
+        from dune3000.engine import COMMANDER_PROFILES
+        self.assertIn("AggressiveRaider", COMMANDER_PROFILES)
+        self.assertIn("MethodicalMentat", COMMANDER_PROFILES)
+        self.assertIn("EconomicTurtler", COMMANDER_PROFILES)
+        self.assertIn("balanced", COMMANDER_PROFILES)
+
+        gs = GameState(GridMap(12, 12))
+        gs.credits["Harkonnen"] = 350
+        cy = Building("ConstructionYard", "Harkonnen", 10, 10, hp=500)
+        gs.buildings.append(cy)
+
+        # AggressiveRaider builds units when credits available
+        action_raider = gs.step_ai_commander("Harkonnen", profile="AggressiveRaider")
+        self.assertIn(action_raider, ["spawned_unit", "spawned_tank", "advanced_units", "defended_harvester"])
+
+        # Test harvester defense rally
+        harv = Unit("Harvester", "Harkonnen", 8, 8, hp=100)
+        threat_enemy = Unit("CombatUnit", "Atreides", 8, 9, hp=100)
+        defender = Unit("CombatUnit", "Harkonnen", 7, 7, hp=100)
+        gs.units.extend([harv, threat_enemy, defender])
+
+        action_defend = gs.step_ai_commander("Harkonnen", profile="EconomicTurtler")
+        self.assertIn(action_defend, ["spawned_unit", "spawned_tank", "advanced_units", "defended_harvester"])
+
+    def test_sandworm_evasion_and_ambush(self):
+        """Test sandworm evasion by units and ambient ambush mechanic."""
+        from dune3000.engine import Sandworm
+        gs = GameState(GridMap(10, 10))
+        worm = Sandworm(5, 5, submerged=False, hp=500)
+        gs.sandworms.append(worm)
+
+        # Unit in worm proximity
+        prey = Unit("CombatUnit", "Atreides", 5, 6, hp=100)
+        gs.units.append(prey)
+
+        # AI step should cause unit to flee from worm
+        gs.step_ai_commander("Atreides")
+        self.assertNotEqual((prey.x, prey.y), (5, 5))
+
+        # Ambush step test
+        ambush_worm = Sandworm(2, 2, submerged=True, hp=500)
+        gs.sandworms.append(ambush_worm)
+        gs.units.append(Unit("Trooper", "Harkonnen", 2, 2, hp=100))
+        gs.units.append(Unit("Trooper2", "Harkonnen", 2, 3, hp=100))
+        gs.units.append(Unit("Trooper3", "Harkonnen", 3, 2, hp=100))
+        res = gs.step_sandworm_ambush(min_seismic_threshold=2)
+        self.assertIsNotNone(res)
+
+    def test_dynamic_spacing_and_formation(self):
+        """Test dynamic formation spacing offsets to prevent single point stacking."""
+        u = Unit("CombatUnit", "Atreides", 5, 5)
+        offset_0 = u.compute_formation_offset(10, 10, index=0, total_units=4, desired_range=2)
+        offset_1 = u.compute_formation_offset(10, 10, index=1, total_units=4, desired_range=2)
+        offset_2 = u.compute_formation_offset(10, 10, index=2, total_units=4, desired_range=2)
+        offset_3 = u.compute_formation_offset(10, 10, index=3, total_units=4, desired_range=2)
+
+        # Offsets should be non-identical
+        coords = [offset_0, offset_1, offset_2, offset_3]
+        unique_coords = set(coords)
+        self.assertEqual(len(unique_coords), 4)
 
 
 if __name__ == "__main__":

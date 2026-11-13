@@ -2,8 +2,9 @@
 Core RTS mechanics for Dune 3000 (inspired by Dune 2000).
 Designed for zero external dependencies and fast deterministic unit testing.
 """
+import math
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Set
 
 SAND = "SAND"
 DUNES = "DUNES"
@@ -70,6 +71,37 @@ HOUSE_SPECIAL_UNITS: Dict[str, Dict] = {
 }
 
 SPECIAL_UNIT_COST: int = 300
+
+COMMANDER_PROFILES: Dict[str, Dict] = {
+    "balanced": {
+        "retreat_ratio": 0.35,
+        "kiting_enabled": True,
+        "escort_harvesters": True,
+        "tank_cost": 200,
+        "target_bias": "threat",
+    },
+    "MethodicalMentat": {
+        "retreat_ratio": 0.35,
+        "kiting_enabled": True,
+        "escort_harvesters": True,
+        "tank_cost": 200,
+        "target_bias": "threat",
+    },
+    "AggressiveRaider": {
+        "retreat_ratio": 0.15,
+        "kiting_enabled": False,
+        "escort_harvesters": False,
+        "tank_cost": 200,
+        "target_bias": "economic",
+    },
+    "EconomicTurtler": {
+        "retreat_ratio": 0.45,
+        "kiting_enabled": True,
+        "escort_harvesters": True,
+        "tank_cost": 200,
+        "target_bias": "defensive",
+    },
+}
 
 
 @dataclass
@@ -159,6 +191,107 @@ class Unit:
 
         return (self.x, self.y)
 
+    def move_away_from(self, target_x: int, target_y: int, game_map: "GridMap") -> Tuple[int, int]:
+        """
+        Move one step (or multiple steps per move_steps) directly away from target coordinates.
+        Uses cardinal movement prioritizing X axis evasion then Y axis evasion within grid boundaries.
+        """
+        steps = getattr(self, "move_steps", 1)
+        for _ in range(steps):
+            if self.x < target_x:
+                nx = self.x - 1
+            elif self.x > target_x:
+                nx = self.x + 1
+            else:
+                nx = self.x
+
+            if nx != self.x and 0 <= nx < game_map.width:
+                ny = self.y
+            elif self.y < target_y:
+                ny = self.y - 1
+            elif self.y > target_y:
+                ny = self.y + 1
+            else:
+                ny = self.y + 1 if self.y + 1 < game_map.height else self.y - 1
+
+            nx = max(0, min(game_map.width - 1, nx))
+            ny = max(0, min(game_map.height - 1, ny))
+            self.x = nx
+            self.y = ny
+
+        return (self.x, self.y)
+
+    def should_retreat(self, health_ratio: float = 0.35) -> bool:
+        """Determines if this unit is critically damaged and should tactically fall back."""
+        if self.hp <= 0 or self.unit_type in ("Saboteur", "Harvester"):
+            return False
+        return (self.hp / max(1, self.max_hp)) <= health_ratio
+
+    def compute_kiting_step(self, target, game_map: "GridMap") -> Tuple[int, int]:
+        """Kiting maneuver: if target is within our weapon range, step back to maintain standoff distance."""
+        dist = abs(self.x - target.x) + abs(self.y - target.y)
+        if 0 < dist < self.attack_range:
+            return self.move_away_from(target.x, target.y, game_map)
+        return (self.x, self.y)
+
+    def retreat_towards(self, safe_x: int, safe_y: int, game_map: "GridMap") -> Tuple[int, int]:
+        """Tactical retreat step towards a safe coordinate (base structure or repair bay)."""
+        return self.move_towards(safe_x, safe_y, game_map)
+
+    def calculate_target_priority(self, target, dist: int, bias: str = "threat") -> float:
+        """Calculate dynamic priority score for a target candidate."""
+        if target.hp <= 0:
+            return -1000.0
+
+        target_type = getattr(target, "unit_type", getattr(target, "building_type", "Unknown"))
+        score = 100.0 - (dist * 10.0)
+
+        # High-value unit bonuses
+        if target_type == "Harvester":
+            score += 150.0 if bias in ("economic", "economy") else 80.0
+        elif target_type in ("SiegeTank", "SonicTank", "Devastator"):
+            score += 90.0 if bias == "threat" else 40.0
+        elif target_type in ("MissileTank", "CombatTank"):
+            score += 50.0
+        elif target_type in ("Refinery", "Palace"):
+            score += 80.0 if bias in ("economic", "economy") else 40.0
+        elif hasattr(target, "building_type"):
+            score += 30.0
+
+        # Focus fire: bonus for heavily damaged targets (eliminate DPS quickly)
+        health_ratio = target.hp / max(1, target.max_hp)
+        score += (1.0 - health_ratio) * 50.0
+
+        # Matchup effectiveness bonus based on weapon vs armor
+        target_armor = getattr(target, "armor_type", "building")
+        expected_dmg = compute_damage(self.weapon_type, target_armor, self.attack_damage)
+        score += (expected_dmg / max(1, self.attack_damage)) * 25.0
+
+        return score
+
+    def select_priority_target(self, candidates: List[Any], game_map: "GridMap", bias: str = "threat") -> Optional[Any]:
+        """Select best tactical target among alive enemy candidates based on priority heuristic."""
+        best_candidate = None
+        best_score = -100000.0
+        for cand in candidates:
+            if cand.hp <= 0:
+                continue
+            dist = abs(self.x - cand.x) + abs(self.y - cand.y)
+            score = self.calculate_target_priority(cand, dist, bias=bias)
+            if score > best_score:
+                best_score = score
+                best_candidate = cand
+        return best_candidate
+
+    def compute_formation_offset(self, target_x: int, target_y: int, index: int, total_units: int, desired_range: int = 1) -> Tuple[int, int]:
+        """Calculates a dispersed combat formation coordinate around a target to prevent stacking."""
+        if total_units <= 1 or desired_range <= 0:
+            return (target_x, target_y)
+        angle = (2.0 * math.pi * index) / max(1, total_units)
+        offset_x = int(round(math.cos(angle) * desired_range))
+        offset_y = int(round(math.sin(angle) * desired_range))
+        return (target_x + offset_x, target_y + offset_y)
+
     def gain_xp(self, amount: int) -> int:
         """
         Gain experience and promote rank if thresholds met.
@@ -231,6 +364,9 @@ class Unit:
 class Sandworm:
     x: int
     y: int
+    hp: int = 500
+    max_hp: int = 500
+    submerged: bool = False
 
     def find_nearest_target(self, units: List[Unit], game_map: "GridMap") -> Optional[Unit]:
         """Finds the nearest unit on sand/dunes/spice tiles (units on ROCK/CONCRETE are safe)."""
@@ -317,66 +453,12 @@ class GameState:
         self.credits[house] = self.credits.get(house, 0) + int(amount)
         return self.credits[house]
 
-    def sell_building(self, building: Building) -> int:
-        if building not in self.buildings or building.hp <= 0:
-            return 0
-        cost = BUILDING_COSTS.get(building.building_type, 250)
-        refund = max(1, int((cost * building.hp) // (2 * building.max_hp)))
-        building.hp = 0
-        self.buildings.remove(building)
-        self.add_credits(building.house, refund)
-        return refund
-
-        self.credits[house] = self.credits.get(house, 0) + int(amount)
-        return self.credits[house]
-
     def power_balance(self, house: str) -> Tuple[int, int]:
         produced = sum(b.power_produced for b in self.buildings if b.house == house and b.hp > 0)
         consumed = sum(b.power_consumed for b in self.buildings if b.house == house and b.hp > 0)
         return produced, consumed
 
     def power_efficiency(self, house: str) -> float:
-        produced, consumed = self.power_balance(house)
-        if consumed <= 0 or produced >= consumed:
-            return 1.0
-        return max(0.25, round(produced / consumed, 4))
-
-    def step_turrets(self) -> int:
-        """Process turret fire for all alive buildings.
-
-        Gun Turrets (short range, works even on low power): range 3, damage 30.
-        Rocket Turrets (long range, requires full power efficiency >= 1.0): range 5, damage 45.
-
-        Returns total damage dealt this tick.
-        """
-        total_damage: int = 0
-        for b in self.buildings:
-            if b.hp <= 0:
-                continue
-            if b.building_type == "GunTurret":
-                rng: int = 3
-                dmg: int = 30
-            elif b.building_type == "RocketTurret":
-                if self.power_efficiency(b.house) < 1.0:
-                    continue
-                rng: int = 5
-                dmg: int = 45
-            else:
-                continue
-            # Find first alive enemy unit in range
-            for u in self.units:
-                if u.hp <= 0:
-                    continue
-                if u.house == b.house:
-                    continue
-                if abs(u.x - b.x) + abs(u.y - b.y) <= rng:
-                    actual: int = min(u.hp, dmg)
-                    u.hp -= actual
-                    total_damage += actual
-                    break
-        return total_damage
-
-    def compute_visibility(self, house: str) -> set:
         produced, consumed = self.power_balance(house)
         if consumed <= 0 or produced >= consumed:
             return 1.0
@@ -408,35 +490,6 @@ class GameState:
                         if abs(u.x - tx) + abs(u.y - ty) <= 3 and self.game_map.in_bounds(tx, ty):
                             visible.add((tx, ty))
         return visible
-
-    def spawn_special_unit(self, house: str, x: int, y: int) -> Optional[Unit]:
-        """Spawn the house's signature special unit.
-
-        Costs 300 credits. If the house has insufficient credits or is not in
-        HOUSE_SPECIAL_UNITS, returns None.
-
-        Otherwise deducts 300 credits, creates the special Unit at (x, y) with
-        the house's configured stats, appends it to self.units, and returns it.
-        """
-        if self.credits.get(house, 0) < SPECIAL_UNIT_COST or house not in HOUSE_SPECIAL_UNITS:
-            return None
-        
-        spec = HOUSE_SPECIAL_UNITS[house]
-        unit = Unit(
-            unit_type=spec["unit_type"],
-            house=house,
-            x=x,
-            y=y,
-            hp=spec["hp"],
-            max_hp=spec["max_hp"],
-            attack_damage=spec["attack_damage"],
-            attack_range=spec["attack_range"],
-            weapon_type=spec["weapon_type"],
-            armor_type=spec["armor_type"],
-        )
-        self.credits[house] = self.credits.get(house, 0) - SPECIAL_UNIT_COST
-        self.units.append(unit)
-        return unit
 
     def check_winner(self) -> Optional[str]:
         """Check if the game has a winner or a draw.
@@ -594,23 +647,31 @@ class GameState:
         self.units.append(unit)
         return unit
 
-    def step_ai_commander(self, house: str) -> str:
-        """AI commander step: spend excess credits to reinforce army or direct combat units.
+    def step_ai_commander(self, house: str, profile: str = "balanced") -> str:
+        """AI commander step: spend excess credits to reinforce army or direct combat units with human-like tactical doctrine.
 
-        If the house has at least 200 credits and owns at least one alive building,
-        deduct 200 credits, spawn a CombatTank at the first alive building's position,
-        append it to self.units, and return "spawned_tank".
+        Supports distinct Commander Profiles:
+        - "balanced" / "MethodicalMentat": Combined-arms tactical awareness, kiting, retreat at 35% HP.
+        - "AggressiveRaider": Offensive aggression, fights down to 15% HP, prioritizes economic targets.
+        - "EconomicTurtler": Defensive stance, protects harvesters, retreats at 45% HP.
 
-        Otherwise, find all alive combat units (unit_type != "Harvester") owned by house
-        and move each one 1 step toward the nearest alive enemy unit or building.
-        Return "advanced_units" if at least one unit moved, or "idle" otherwise.
+        Tactical Loop:
+        1. Spend excess credits (>= 200) to reinforce army when alive buildings exist.
+        2. Detect Sandworm tremors within 5 tiles on sand and scatter to safety.
+        3. Tactically retreat critically damaged units to friendly buildings.
+        4. Select highest-priority enemy target (valuable units, wounded targets for focus fire).
+        5. Maintain weapon standoff range via kiting when enemies press too close.
+        6. Advance towards priority target or formation coordinate.
         """
-        # If house has enough credits and at least one alive building, spawn a tank
-        if self.credits.get(house, 0) >= 200:
+        prof = COMMANDER_PROFILES.get(profile, COMMANDER_PROFILES["balanced"])
+
+        # 1. Spawning / Production
+        tank_cost = prof.get("tank_cost", 200)
+        if self.credits.get(house, 0) >= tank_cost:
             alive_buildings = [b for b in self.buildings if b.house == house and b.hp > 0]
             if alive_buildings:
                 b = alive_buildings[0]
-                self.credits[house] = self.credits.get(house, 0) - 200
+                self.credits[house] = self.credits.get(house, 0) - tank_cost
                 tank = Unit(
                     unit_type="CombatTank",
                     house=house,
@@ -626,49 +687,115 @@ class GameState:
                 self.units.append(tank)
                 return "spawned_tank"
 
-        # Otherwise: move combat units toward nearest enemy
+        # 2. Collect combat units
         combat_units = [
             u for u in self.units
             if u.house == house and u.hp > 0 and u.unit_type != "Harvester"
         ]
-
         if not combat_units:
             return "idle"
 
         moved_any = False
+        safe_tiles = {ROCK, CONCRETE}
+
+        friendly_buildings = [b for b in self.buildings if b.house == house and b.hp > 0]
+        friendly_harvesters = [u for u in self.units if u.house == house and u.hp > 0 and u.unit_type == "Harvester"]
+
+        enemy_units = [u for u in self.units if u.house != house and u.hp > 0]
+        enemy_buildings = [b for b in self.buildings if b.house != house and b.hp > 0]
+        candidates = enemy_units + enemy_buildings
+
         for unit in combat_units:
-            # Save position before moving
             old_x, old_y = unit.x, unit.y
 
-            # Find nearest alive enemy unit or building
-            nearest_dist = 10**9
-            nearest_target = None
+            # 1. Sandworm Tremor Hazard Check (scatter away from worm on sand)
+            current_tile = self.game_map.get_tile(unit.x, unit.y)
+            if current_tile not in safe_tiles and self.sandworms:
+                threatening_worm = None
+                for w in self.sandworms:
+                    if not getattr(w, "submerged", False):
+                        if abs(unit.x - w.x) + abs(unit.y - w.y) <= 5:
+                            threatening_worm = w
+                            break
+                if threatening_worm is not None:
+                    unit.move_away_from(threatening_worm.x, threatening_worm.y, self.game_map)
+                    if (unit.x, unit.y) != (old_x, old_y):
+                        moved_any = True
+                        continue
 
-            # Check enemy units
-            for other in self.units:
-                if other.house != house and other.hp > 0:
-                    dist = abs(unit.x - other.x) + abs(unit.y - other.y)
-                    if dist < nearest_dist:
-                        nearest_dist = dist
-                        nearest_target = other
-
-            # Check enemy buildings
-            for b in self.buildings:
-                if b.house != house and b.hp > 0:
-                    dist = abs(unit.x - b.x) + abs(unit.y - b.y)
-                    if dist < nearest_dist:
-                        nearest_dist = dist
-                        nearest_target = b
-
-            # Move toward the nearest target
-            if nearest_target is not None:
-                unit.move_towards(nearest_target.x, nearest_target.y, self.game_map)
-                if unit.x != old_x or unit.y != old_y:
+            # 2. Tactical Retreat when critically wounded
+            if unit.should_retreat(prof.get("retreat_ratio", 0.35)) and friendly_buildings:
+                nearest_b = min(friendly_buildings, key=lambda b: abs(unit.x - b.x) + abs(unit.y - b.y))
+                unit.retreat_towards(nearest_b.x, nearest_b.y, self.game_map)
+                if (unit.x, unit.y) != (old_x, old_y):
                     moved_any = True
+                    continue
+
+            # 3. Harvester Protection / Defense Screening
+            if prof.get("escort_harvesters", True) and friendly_harvesters and enemy_units:
+                harvester_threat = None
+                for harv in friendly_harvesters:
+                    for eu in enemy_units:
+                        if abs(harv.x - eu.x) + abs(harv.y - eu.y) <= 5:
+                            harvester_threat = eu
+                            break
+                    if harvester_threat:
+                        break
+                if harvester_threat is not None:
+                    unit.move_towards(harvester_threat.x, harvester_threat.y, self.game_map)
+                    if (unit.x, unit.y) != (old_x, old_y):
+                        moved_any = True
+                        continue
+
+            # 4. Target Prioritization and Kiting
+            if not candidates:
+                continue
+
+            target = unit.select_priority_target(candidates, self.game_map, bias=prof.get("target_bias", "threat"))
+            if target is None:
+                continue
+
+            # Tactical Kiting: maintain standoff distance if enemy inside weapon range
+            dist = abs(unit.x - target.x) + abs(unit.y - target.y)
+            if prof.get("kiting_enabled", True) and unit.attack_range >= 2:
+                target_range = getattr(target, "attack_range", 1)
+                if 0 < dist < unit.attack_range and target_range <= unit.attack_range:
+                    unit.compute_kiting_step(target, self.game_map)
+                    if (unit.x, unit.y) != (old_x, old_y):
+                        moved_any = True
+                        continue
+
+            # Advance towards target
+            unit.move_towards(target.x, target.y, self.game_map)
+            if (unit.x, unit.y) != (old_x, old_y):
+                moved_any = True
 
         if moved_any:
             return "advanced_units"
         return "idle"
+
+    def step_sandworm_ambush(self, min_seismic_threshold: int = 3) -> Optional[Unit]:
+        """Subterranean ambush: submerged sandworms detect seismic vibrations on sand and breach."""
+        safe_tiles = {ROCK, CONCRETE}
+        ambushed_unit: Optional[Unit] = None
+        for w in self.sandworms:
+            if not getattr(w, "submerged", False):
+                continue
+            vibrating_units = [
+                u for u in self.units
+                if u.hp > 0 and self.game_map.get_tile(u.x, u.y) not in safe_tiles
+                and (abs(u.x - w.x) + abs(u.y - w.y) <= 8)
+            ]
+            if len(vibrating_units) >= min_seismic_threshold:
+                w.submerged = False
+                target = min(vibrating_units, key=lambda u: abs(u.x - w.x) + abs(u.y - w.y))
+                w.x, w.y = target.x, target.y
+                target.hp = 0
+                if target in self.units:
+                    self.units.remove(target)
+                ambushed_unit = target
+                break
+        return ambushed_unit
 
     def construct_building(self, house: str, building_type: str, x: int, y: int) -> Optional[Building]:
         cost = BUILDING_COSTS.get(building_type, 250)
