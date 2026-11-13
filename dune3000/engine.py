@@ -367,6 +367,7 @@ class Sandworm:
     hp: int = 500
     max_hp: int = 500
     submerged: bool = False
+    tremor: bool = False
 
     def find_nearest_target(self, units: List[Unit], game_map: "GridMap") -> Optional[Unit]:
         """Finds the nearest unit on sand/dunes/spice tiles (units on ROCK/CONCRETE are safe)."""
@@ -417,6 +418,30 @@ class Sandworm:
         return None
 
 
+@dataclass
+class WeatherFront:
+    x: int
+    y: int
+    vx: int = 1
+    vy: int = 0
+    radius: int = 2
+    intensity: int = 15
+    duration: int = 5
+    active: bool = True
+
+    def step(self, game_map: "GridMap") -> Tuple[int, int]:
+        """Advance weather front along its velocity trajectory."""
+        if not self.active or self.duration <= 0:
+            self.active = False
+            return (self.x, self.y)
+        self.x += self.vx
+        self.y += self.vy
+        self.duration -= 1
+        if self.duration <= 0:
+            self.active = False
+        return (self.x, self.y)
+
+
 class GridMap:
     def __init__(self, width: int = 16, height: int = 16, default_tile: str = SAND):
         self.width = width
@@ -448,6 +473,7 @@ class GameState:
     units: List[Unit] = field(default_factory=list)
     sandworms: List[Sandworm] = field(default_factory=list)
     spice_carried: Dict[str, int] = field(default_factory=lambda: {h: 0 for h in HOUSES})
+    weather_fronts: List[WeatherFront] = field(default_factory=list)
 
     def add_credits(self, house: str, amount: int) -> int:
         self.credits[house] = self.credits.get(house, 0) + int(amount)
@@ -788,12 +814,24 @@ class GameState:
             ]
             if len(vibrating_units) >= min_seismic_threshold:
                 w.submerged = False
-                target = min(vibrating_units, key=lambda u: abs(u.x - w.x) + abs(u.y - w.y))
+                w.tremor = True
+
+                def cluster_score(candidate: Unit) -> int:
+                    return sum(
+                        1 for other in vibrating_units
+                        if abs(candidate.x - other.x) + abs(candidate.y - other.y) <= 2
+                    )
+
+                target = max(
+                    vibrating_units,
+                    key=lambda u: (cluster_score(u), -(abs(u.x - w.x) + abs(u.y - w.y)))
+                )
                 w.x, w.y = target.x, target.y
-                target.hp = 0
-                if target in self.units:
-                    self.units.remove(target)
-                ambushed_unit = target
+                if abs(w.x - target.x) + abs(w.y - target.y) <= 1:
+                    target.hp = 0
+                    if target in self.units:
+                        self.units.remove(target)
+                    ambushed_unit = target
                 break
         return ambushed_unit
 
@@ -1018,6 +1056,144 @@ class GameState:
                         u.hp = max(0, u.hp - 15)
                         damaged_count += 1
         return damaged_count
+
+    def spawn_weather_front(
+        self,
+        x: int,
+        y: int,
+        vx: int = 1,
+        vy: int = 0,
+        radius: int = 2,
+        intensity: int = 15,
+        duration: int = 5,
+    ) -> WeatherFront:
+        """Spawn a dynamic Coriolis weather front traveling with velocity (vx, vy)."""
+        front = WeatherFront(
+            x=x, y=y, vx=vx, vy=vy, radius=radius, intensity=intensity, duration=duration
+        )
+        self.weather_fronts.append(front)
+        return front
+
+    def step_weather_fronts(self) -> List[Dict[str, Any]]:
+        """Advance dynamic weather fronts along their trajectories and apply sandstorm hazards.
+
+        Units on ROCK, CONCRETE, or sheltered within distance <= 1 of an active FremenSietch
+        are protected. Exposed units within distance <= radius suffer intensity damage.
+        """
+        results: List[Dict[str, Any]] = []
+        safe_tiles = {ROCK, CONCRETE}
+
+        sietch_shelters = [
+            (b.x, b.y) for b in self.buildings
+            if b.building_type == "FremenSietch" and b.hp > 0
+        ]
+
+        def is_sheltered(ux: int, uy: int) -> bool:
+            if self.game_map.get_tile(ux, uy) in safe_tiles:
+                return True
+            for sx, sy in sietch_shelters:
+                if abs(ux - sx) + abs(uy - sy) <= 1:
+                    return True
+            return False
+
+        for front in list(self.weather_fronts):
+            if not front.active:
+                continue
+            front.step(self.game_map)
+            damaged_count = 0
+            for u in self.units:
+                if u.hp > 0:
+                    dist = abs(u.x - front.x) + abs(u.y - front.y)
+                    if dist <= front.radius and not is_sheltered(u.x, u.y):
+                        u.hp = max(0, u.hp - front.intensity)
+                        damaged_count += 1
+
+            results.append({
+                "x": front.x,
+                "y": front.y,
+                "radius": front.radius,
+                "intensity": front.intensity,
+                "damaged_units": damaged_count,
+                "active": front.active,
+            })
+
+        return results
+
+    def infiltrate_sietch(self, unit: Unit, sietch: Building) -> Optional[Dict[str, Any]]:
+        """Tactical infiltration or garrison of a Fremen Sietch.
+
+        Requirements:
+        - unit and sietch must be alive (hp > 0)
+        - sietch must have building_type == 'FremenSietch'
+        - unit must be adjacent to or co-located with sietch (Manhattan distance <= 1)
+
+        Outcomes:
+        - Allied (unit.house == sietch.house):
+          Unit shelters inside the Sietch, restoring up to 25 HP.
+        - Hostile / Rival (unit.house != sietch.house):
+          Unit infiltrates enemy or neutral Sietch:
+          - Extracts spice cache (up to 250 credits gained).
+          - Liberates and recruits an allied FremenWarrior at the Sietch location.
+          - Covert specialists (Saboteur, FremenWarrior) survive and gain 50 XP.
+            Other standard units are consumed during the infiltration.
+        """
+        if (
+            unit.hp <= 0
+            or sietch.hp <= 0
+            or sietch.building_type != "FremenSietch"
+            or (abs(unit.x - sietch.x) + abs(unit.y - sietch.y) > 1)
+        ):
+            return None
+
+        if unit.house == sietch.house:
+            missing_hp = unit.max_hp - unit.hp
+            restored = min(25, missing_hp)
+            unit.hp += restored
+            return {
+                "success": True,
+                "action": "sheltered",
+                "healed": restored,
+                "unit_survived": True,
+            }
+
+        credits_stolen = 200
+        if sietch.house in self.credits:
+            available = self.credits[sietch.house]
+            credits_stolen = min(250, max(50, available))
+            self.credits[sietch.house] = max(0, self.credits[sietch.house] - credits_stolen)
+
+        self.credits[unit.house] = self.credits.get(unit.house, 0) + credits_stolen
+
+        fremen = Unit(
+            unit_type="FremenWarrior",
+            house=unit.house,
+            x=sietch.x,
+            y=sietch.y,
+            hp=120,
+            max_hp=120,
+            attack_damage=28,
+            attack_range=3,
+            weapon_type="bullet",
+            armor_type="infantry",
+        )
+        self.units.append(fremen)
+
+        unit_survived = False
+        if unit.unit_type in ("Saboteur", "FremenWarrior"):
+            unit_survived = True
+            unit.gain_xp(50)
+        else:
+            unit.hp = 0
+            if unit in self.units:
+                self.units.remove(unit)
+
+        return {
+            "success": True,
+            "action": "infiltrated",
+            "credits_gained": credits_stolen,
+            "recruited_unit": fremen,
+            "unit_survived": unit_survived,
+        }
 
     def sabotage(self, saboteur: Unit, building: Building) -> bool:
         """Sabotage an adjacent enemy building using a Saboteur.

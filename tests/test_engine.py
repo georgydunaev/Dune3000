@@ -14,6 +14,7 @@ from dune3000.engine import (
     GridMap,
     Sandworm,
     Unit,
+    WeatherFront,
     compute_damage,
 )
 from dune3000.procgen import (
@@ -1625,6 +1626,170 @@ class TestDune3000Engine(unittest.TestCase):
         coords = [offset_0, offset_1, offset_2, offset_3]
         unique_coords = set(coords)
         self.assertEqual(len(unique_coords), 4)
+
+    def test_sandworm_subterranean_ambush(self):
+        """Test Sandworm Subterranean Ambush Mechanic (Ticket 034)."""
+        gs = GameState(GridMap(16, 16))
+
+        # Setup submerged sandworm at (5, 5)
+        worm = Sandworm(5, 5, submerged=True, hp=500)
+        gs.sandworms.append(worm)
+
+        # 1. Units on ROCK and CONCRETE emit zero vibrations; worm remains submerged
+        gs.game_map.set_tile(5, 6, ROCK)
+        gs.game_map.set_tile(6, 5, CONCRETE)
+        gs.game_map.set_tile(5, 4, ROCK)
+        u_rock1 = Unit("Trooper", "Atreides", 5, 6, hp=100)
+        u_conc = Unit("Trooper", "Harkonnen", 6, 5, hp=100)
+        u_rock2 = Unit("Trooper", "Ordos", 5, 4, hp=100)
+        gs.units.extend([u_rock1, u_conc, u_rock2])
+
+        result = gs.step_sandworm_ambush(min_seismic_threshold=3)
+        self.assertIsNone(result)
+        self.assertTrue(worm.submerged)
+        self.assertFalse(worm.tremor)
+
+        # 2. Units on sand below threshold (e.g. 2 units with threshold 3)
+        u_sand1 = Unit("Trooper", "Atreides", 4, 5, hp=100)
+        u_sand2 = Unit("Trooper", "Atreides", 5, 7, hp=100)
+        gs.units.extend([u_sand1, u_sand2])
+        result = gs.step_sandworm_ambush(min_seismic_threshold=3)
+        self.assertIsNone(result)
+        self.assertTrue(worm.submerged)
+
+        # 3. Distant units (> 8 distance) do not count towards vibrations
+        u_far = Unit("Trooper", "Harkonnen", 15, 15, hp=100)
+        gs.units.append(u_far)
+        result = gs.step_sandworm_ambush(min_seismic_threshold=3)
+        self.assertIsNone(result)
+        self.assertTrue(worm.submerged)
+
+        # 4. Adding units on sand in dense cluster near (4, 5) triggers breach
+        u_sand3 = Unit("Trooper", "Harkonnen", 4, 4, hp=100)
+        u_sand4 = Unit("Trooper", "Harkonnen", 3, 5, hp=100)
+        gs.units.extend([u_sand3, u_sand4])
+
+        ambushed = gs.step_sandworm_ambush(min_seismic_threshold=3)
+        self.assertIsNotNone(ambushed)
+        self.assertFalse(worm.submerged)
+        self.assertTrue(worm.tremor)
+        self.assertEqual(ambushed.hp, 0)
+        self.assertNotIn(ambushed, gs.units)
+        # Worm repositions to the densest cluster
+        self.assertEqual((worm.x, worm.y), (ambushed.x, ambushed.y))
+
+    def test_dynamic_weather_front_trajectory_and_shelter(self):
+        """Test Dynamic Coriolis Weather Fronts and shelter mechanics (Ticket 040)."""
+        gs = GameState(GridMap(16, 16))
+
+        # Spawn weather front moving east (vx=1, vy=0)
+        front = gs.spawn_weather_front(x=2, y=2, vx=1, vy=0, radius=2, intensity=20, duration=3)
+        self.assertEqual(len(gs.weather_fronts), 1)
+        self.assertTrue(front.active)
+
+        # Setup units:
+        # u_exposed on SAND at (3, 2): within radius of front after step 1 (x=3, y=2)
+        u_exposed = Unit("Trooper", "Atreides", 3, 2, hp=100)
+        # u_rock on ROCK at (3, 3): within radius, but sheltered by bedrock
+        gs.game_map.set_tile(3, 3, ROCK)
+        u_rock = Unit("Trooper", "Atreides", 3, 3, hp=100)
+        # u_concrete on CONCRETE at (3, 1): within radius, sheltered by concrete slab
+        gs.game_map.set_tile(3, 1, CONCRETE)
+        u_concrete = Unit("Trooper", "Atreides", 3, 1, hp=100)
+        # u_sietch_sheltered on SAND at (4, 2), adjacent to FremenSietch at (4, 3)
+        sietch = Building("FremenSietch", "Atreides", 4, 3, hp=500)
+        gs.buildings.append(sietch)
+        u_sietch_sheltered = Unit("Trooper", "Atreides", 4, 2, hp=100)
+
+        gs.units.extend([u_exposed, u_rock, u_concrete, u_sietch_sheltered])
+
+        # Step 1: front moves from (2, 2) to (3, 2)
+        res1 = gs.step_weather_fronts()
+        self.assertEqual(len(res1), 1)
+        self.assertEqual(front.x, 3)
+        self.assertEqual(front.y, 2)
+        self.assertEqual(front.duration, 2)
+        self.assertTrue(front.active)
+
+        # Exposed unit took 20 damage (100 to 80)
+        self.assertEqual(u_exposed.hp, 80)
+        # Sheltered units took 0 damage
+        self.assertEqual(u_rock.hp, 100)
+        self.assertEqual(u_concrete.hp, 100)
+        self.assertEqual(u_sietch_sheltered.hp, 100)
+
+        # Step 2: front moves to (4, 2)
+        gs.step_weather_fronts()
+        self.assertEqual(front.x, 4)
+        self.assertEqual(front.duration, 1)
+
+        # Step 3: front moves to (5, 2), duration becomes 0, front deactivated
+        gs.step_weather_fronts()
+        self.assertEqual(front.x, 5)
+        self.assertEqual(front.duration, 0)
+        self.assertFalse(front.active)
+
+    def test_sietch_tactical_infiltration(self):
+        """Test Fremen Sietch tactical infiltration and garrison (Ticket 040)."""
+        gs = GameState(GridMap(16, 16))
+        gs.credits["Atreides"] = 500
+        gs.credits["Harkonnen"] = 300
+
+        # FremenSietch owned by Harkonnen at (5, 5)
+        sietch = Building("FremenSietch", "Harkonnen", 5, 5, hp=500)
+        gs.buildings.append(sietch)
+
+        # 1. Invalid infiltration: non-adjacent unit (> 1 distance)
+        u_far = Unit("Trooper", "Atreides", 8, 8, hp=100)
+        gs.units.append(u_far)
+        self.assertIsNone(gs.infiltrate_sietch(u_far, sietch))
+
+        # 2. Invalid infiltration: non-Sietch building
+        barracks = Building("Barracks", "Harkonnen", 5, 6, hp=400)
+        gs.buildings.append(barracks)
+        u_adj = Unit("Trooper", "Atreides", 5, 7, hp=100)
+        gs.units.append(u_adj)
+        self.assertIsNone(gs.infiltrate_sietch(u_adj, barracks))
+
+        # 3. Allied Garrison: Harkonnen unit enters Harkonnen Sietch to heal
+        u_allied = Unit("CombatTank", "Harkonnen", 5, 6, hp=60, max_hp=100)
+        gs.units.append(u_allied)
+        res_allied = gs.infiltrate_sietch(u_allied, sietch)
+        self.assertIsNotNone(res_allied)
+        self.assertEqual(res_allied["action"], "sheltered")
+        self.assertEqual(res_allied["healed"], 25)
+        self.assertEqual(u_allied.hp, 85)
+
+        # 4. Hostile Infiltration by Saboteur (covert unit survives and gains XP)
+        saboteur = Unit("Saboteur", "Atreides", 4, 5, hp=45, max_hp=45)
+        gs.units.append(saboteur)
+        initial_atreides_credits = gs.credits["Atreides"]
+        initial_harkonnen_credits = gs.credits["Harkonnen"]
+
+        res_sab = gs.infiltrate_sietch(saboteur, sietch)
+        self.assertIsNotNone(res_sab)
+        self.assertEqual(res_sab["action"], "infiltrated")
+        self.assertTrue(res_sab["unit_survived"])
+        self.assertGreater(res_sab["credits_gained"], 0)
+        self.assertEqual(gs.credits["Atreides"], initial_atreides_credits + res_sab["credits_gained"])
+        self.assertEqual(gs.credits["Harkonnen"], initial_harkonnen_credits - res_sab["credits_gained"])
+        # Saboteur survived and gained XP
+        self.assertEqual(saboteur.xp, 50)
+        self.assertIn(saboteur, gs.units)
+        # Recruited FremenWarrior added to units for Atreides
+        recruited = res_sab["recruited_unit"]
+        self.assertEqual(recruited.unit_type, "FremenWarrior")
+        self.assertEqual(recruited.house, "Atreides")
+        self.assertIn(recruited, gs.units)
+
+        # 5. Hostile Infiltration by Standard Infantry (consumed on mission)
+        trooper = Unit("Trooper", "Ordos", 6, 5, hp=100)
+        gs.units.append(trooper)
+        res_trooper = gs.infiltrate_sietch(trooper, sietch)
+        self.assertIsNotNone(res_trooper)
+        self.assertFalse(res_trooper["unit_survived"])
+        self.assertEqual(trooper.hp, 0)
+        self.assertNotIn(trooper, gs.units)
 
 
 if __name__ == "__main__":
